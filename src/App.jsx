@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import TopicInput from "./components/TopicInput";
 import ScriptView from "./components/ScriptView";
@@ -10,12 +10,66 @@ import Auth from "./components/Auth";
 import Navbar from "./components/Navbar";
 
 import { supabase } from "./supabaseClient";
-
 import {
   generateScriptAPI,
   getClipsAPI,
   generateVideoAPI,
 } from "./services/api";
+
+/* -------------------------
+   SIMPLE TOAST
+------------------------- */
+
+function Toast({ message, type, onClose }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  const bg = type === "error" ? "#c0392b" : "#27ae60";
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: "24px",
+        right: "24px",
+        background: bg,
+        color: "#fff",
+        padding: "12px 20px",
+        borderRadius: "8px",
+        zIndex: 9999,
+        maxWidth: "360px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+        fontSize: "14px",
+      }}
+    >
+      {message}
+      <span
+        onClick={onClose}
+        style={{ marginLeft: "16px", cursor: "pointer", fontWeight: "bold" }}
+      >
+        ✕
+      </span>
+    </div>
+  );
+}
+
+function useToast() {
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((message, type = "error") => {
+    setToast({ message, type });
+  }, []);
+
+  const clearToast = useCallback(() => setToast(null), []);
+
+  return { toast, showToast, clearToast };
+}
+
+/* -------------------------
+   APP
+------------------------- */
 
 function App() {
   const [topic, setTopic] = useState("");
@@ -25,82 +79,96 @@ function App() {
   const [clips, setClips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedClips, setSelectedClips] = useState({});
-  const [videoUrl, setVideoUrl] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null);
+  const [downloadUrl, setDownloadUrl] = useState(null);
 
   const [user, setUser] = useState(null);
-  const [keysReady, setApiKeysSet] = useState(false);
+
+  // Keys stored in memory (React state), never in localStorage
+  const [apiKeys, setApiKeys] = useState(null); // { groqKey, pexelsKey, pixabayKey }
   const [checkingKeys, setCheckingKeys] = useState(true);
+
   const [rendering, setRendering] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
 
+  const { toast, showToast, clearToast } = useToast();
+
   /* -------------------------
-     CHECK KEYS AFTER LOGIN
+     FETCH KEYS FROM SUPABASE INTO STATE
   ------------------------- */
 
-  const checkKeys = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  const fetchKeys = useCallback(async () => {
+    setCheckingKeys(true);
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+      if (!currentUser) {
+        setCheckingKeys(false);
+        return;
+      }
 
-    if (!user) return;
+      const { data, error } = await supabase
+        .from("api_keys")
+        .select("groq_key, pexels_key, pixabay_key")
+        .eq("user_id", currentUser.id)
+        .single();
 
-    const { data } = await supabase
-      .from("api_keys")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+      if (error || !data) {
+        console.error("Key fetch error:", error?.message);
+        setCheckingKeys(false);
+        return;
+      }
 
-    if (data) {
-      localStorage.setItem("groqKey", data.groq_key);
-      localStorage.setItem("pexelsKey", data.pexels_key);
-
-      setApiKeysSet(true);
+      setApiKeys({
+        groqKey: data.groq_key,
+        pexelsKey: data.pexels_key,
+        pixabayKey: data.pixabay_key,
+      });
+    } catch (err) {
+      console.error("fetchKeys failed:", err);
+    } finally {
+      setCheckingKeys(false);
     }
-
-    setCheckingKeys(false);
-  };
+  }, []);
 
   useEffect(() => {
-    const loadKeys = async () => {
-      if (user) {
-        await checkKeys();
-      }
-    };
+    if (user) fetchKeys();
+  }, [user, fetchKeys]);
 
-    loadKeys();
-  }, [user]);
+  /* -------------------------
+     REAL SSE PROGRESS
+  ------------------------- */
 
   useEffect(() => {
     const eventSource = new EventSource("http://localhost:3000/progress");
 
     eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-
-      setProgress(data.percent);
-      setProgressText(data.step);
+      try {
+        const data = JSON.parse(event.data);
+        setProgress(data.percent);
+        setProgressText(data.step);
+      } catch (err) {
+        console.error("SSE parse error:", err);
+      }
     };
 
-    return () => {
-      eventSource.close();
+    eventSource.onerror = () => {
+      console.error("SSE connection error");
     };
+
+    return () => eventSource.close();
   }, []);
 
   /* -------------------------
-     LOGIN SCREEN
+     AUTH GATE
   ------------------------- */
 
-  if (!user) {
-    return <Auth onLogin={setUser} />;
-  }
-
-  if (checkingKeys) {
+  if (!user) return <Auth onLogin={setUser} />;
+  if (checkingKeys)
     return <h2 style={{ textAlign: "center" }}>Checking API keys...</h2>;
-  }
-
-  if (!keysReady) {
-    return <ApiKeySetup onSave={() => setApiKeysSet(true)} />;
-  }
+  if (!apiKeys) return <ApiKeySetup onSave={fetchKeys} />;
 
   /* -------------------------
      GENERATE SCRIPT
@@ -114,34 +182,26 @@ function App() {
     setKeywords([]);
     setGeneratedKeywords([]);
     setClips([]);
-    setVideoUrl(null);
+    setStreamUrl(null);
+    setDownloadUrl(null);
 
     try {
-      const data = await generateScriptAPI(topic);
-
-      const scriptData =
-        data.script || data.data?.script || data[0]?.script || [];
-
-      const keywordData =
-        data.keywords || data.data?.keywords || data[0]?.keywords || [];
-
-      setScript(scriptData);
-      setGeneratedKeywords(keywordData);
+      const data = await generateScriptAPI(topic, apiKeys);
+      setScript(data.script || []);
+      setGeneratedKeywords(data.keywords || []);
     } catch (err) {
-      console.error(err);
-      alert("Script generation failed");
+      console.error("generateScript:", err);
+      showToast("Script generation failed. Check your Groq key or topic.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   /* -------------------------
-     KEYWORD HANDLING
+     KEYWORDS
   ------------------------- */
 
-  const showKeywords = () => {
-    setKeywords(generatedKeywords);
-  };
+  const showKeywords = () => setKeywords(generatedKeywords);
 
   const updateKeyword = (index, value) => {
     const updated = [...keywords];
@@ -150,32 +210,25 @@ function App() {
   };
 
   /* -------------------------
-     CLIP SELECTION
-  ------------------------- */
-
-  const selectClip = (sceneIndex, clipUrl) => {
-    setSelectedClips((prev) => ({
-      ...prev,
-      [sceneIndex]: clipUrl,
-    }));
-  };
-
-  /* -------------------------
      FETCH CLIPS
   ------------------------- */
 
   const getClips = async () => {
     try {
-      const data = await getClipsAPI(script, keywords);
-
-      const sceneClips =
-        data.scenes || data.data?.scenes || data[0]?.scenes || [];
-
-      setClips(sceneClips);
+      const data = await getClipsAPI(script, keywords, apiKeys);
+      setClips(data.scenes || []);
     } catch (err) {
-      console.error(err);
-      alert("Failed to fetch clips");
+      console.error("getClips:", err);
+      showToast("Failed to fetch clips. Check your Pexels / Pixabay keys.");
     }
+  };
+
+  /* -------------------------
+     CLIP SELECTION
+  ------------------------- */
+
+  const selectClip = (sceneIndex, clipUrl) => {
+    setSelectedClips((prev) => ({ ...prev, [sceneIndex]: clipUrl }));
   };
 
   /* -------------------------
@@ -186,44 +239,40 @@ function App() {
     const urls = Object.values(selectedClips);
 
     if (urls.length !== script.length) {
-      alert("Please select one clip for each scene");
+      showToast("Please select one clip for each scene.", "error");
       return;
     }
 
     try {
       setRendering(true);
-      setProgress(10);
+      setProgress(0);
+      setProgressText("Starting...");
 
-      // simulate progress
-      const progressTimer = setInterval(() => {
-        setProgress((p) => {
-          if (p >= 90) return p;
-          return p + 7.5;
-        });
-      }, 2000);
-
-      await generateVideoAPI(urls, script);
-
-      clearInterval(progressTimer);
+      const result = await generateVideoAPI(urls, script);
 
       setProgress(100);
-
-      // video ready → enable download
-      setVideoUrl("http://localhost:3000/download");
+      setProgressText("Done!");
+      setStreamUrl(result.streamUrl);
+      setDownloadUrl(result.downloadUrl);
+      showToast("Video ready!", "success");
     } catch (err) {
-      console.error(err);
-      alert("Video generation failed");
+      console.error("generateVideo:", err);
+      showToast("Video generation failed. Check the server logs.");
     } finally {
       setRendering(false);
     }
   };
 
   /* -------------------------
-     MAIN UI
+     RENDER
   ------------------------- */
 
   return (
     <div className="app">
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={clearToast} />
+      )}
+
       <Navbar />
       <div className="container">
         <h1 className="title">AI Video Generator</h1>
@@ -260,7 +309,6 @@ function App() {
             <p>
               {progressText} ({progress}%)
             </p>
-
             <div
               style={{
                 width: "100%",
@@ -285,20 +333,17 @@ function App() {
           clips={clips}
           generateVideo={generateVideo}
           disabled={rendering}
-          videoReady={!!videoUrl}
+          videoReady={!!streamUrl}
         />
 
-        {/* Final Video */}
-        {videoUrl && (
+        {streamUrl && (
           <div style={{ marginTop: "40px", textAlign: "center" }}>
             <h2>Final Generated Video</h2>
-
             <video controls width="600" style={{ borderRadius: "10px" }}>
-              <source src={videoUrl} type="video/mp4" />
+              <source src={streamUrl} type="video/mp4" />
             </video>
-
             <div style={{ marginTop: "15px" }}>
-              <a href={videoUrl} download>
+              <a href={downloadUrl} download>
                 <button className="generate-btn">Download Video</button>
               </a>
             </div>

@@ -1,65 +1,74 @@
 const BASE_URL = "http://localhost:3000";
 
-export const generateScriptAPI = async (topic) => {
+/* -------------------------
+   GENERATE SCRIPT
+------------------------- */
+
+export const generateScriptAPI = async (topic, apiKeys) => {
   const res = await fetch(`${BASE_URL}/generate-script`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       topic,
-      pexelsKey: localStorage.getItem("pexelsKey"),
-      groqKey: localStorage.getItem("groqKey"),
+      groqKey: apiKeys.groqKey,
     }),
   });
 
   if (!res.ok) {
-    throw new Error("Failed to generate script");
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to generate script");
   }
 
   return res.json();
 };
 
-export const getClipsAPI = async (script, keywords) => {
-  const payload = {
-    script,
-    keywords,
-    pexelsKey: localStorage.getItem("pexelsKey"),
-    groqKey: localStorage.getItem("groqKey"),
-    pixabayKey: localStorage.getItem("pixabayKey"),
-  };
+/* -------------------------
+   GET CLIPS
+------------------------- */
 
-  console.log("GET CLIPS PAYLOAD:", payload);
-
+export const getClipsAPI = async (script, keywords, apiKeys) => {
   const res = await fetch(`${BASE_URL}/get-clips`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  return res.json();
-};
-
-export const generateVideoAPI = async (videoUrls, script) => {
-  // Step 1: Generate TTS
-  await fetch(`${BASE_URL}/tts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      text: script.join(" "),
-    }),
-  });
-
-  // Step 2: Generate Video
-  const res = await fetch(`${BASE_URL}/video`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      videoUrls,
+      script,
+      keywords,
+      pexelsKey: apiKeys.pexelsKey,
+      pixabayKey: apiKeys.pixabayKey,
     }),
   });
 
   if (!res.ok) {
-    throw new Error("Failed to generate video");
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to fetch clips");
   }
 
   return res.json();
+};
+
+/* -------------------------
+   GENERATE VIDEO
+   Calls /generate-video which handles TTS + render internally
+------------------------- */
+
+export const generateVideoAPI = async (videoUrls, script) => {
+  const res = await fetch(`${BASE_URL}/generate-video`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ videoUrls, script }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to generate video");
+  }
+
+  const data = await res.json();
+
+  // Return scoped stream + download URLs using jobId from server
+  return {
+    ...data,
+    streamUrl: `${BASE_URL}/stream/${data.jobId}`,
+    downloadUrl: `${BASE_URL}/download/${data.jobId}`,
+  };
 };
