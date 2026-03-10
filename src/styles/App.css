@@ -1,0 +1,319 @@
+/* GLOBAL */
+
+body {
+  margin: 0;
+  background: #0f0f0f;
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: white;
+}
+
+/* MAIN APP */
+
+.app {
+  margin: auto;
+  margin-top: 40px;
+}
+
+/* CONTAINER */
+
+.container {
+  margin: auto;
+  width: 100%;
+  max-width: 1300px;
+  padding: 40px 30px;
+}
+
+/* TITLE */
+
+.title {
+  font-size: 42px;
+  font-weight: 700;
+  margin-bottom: 40px;
+  letter-spacing: 1px;
+}
+
+/* CARD */
+
+.card {
+  background: linear-gradient(145deg, #1a1a1a, #141414);
+  border: 1px solid #2a2a2a;
+  border-radius: 14px;
+  padding: 28px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+  transition: 0.25s;
+}
+
+.card:hover {
+  border-color: #00ff88;
+}
+
+/* INPUT ROW */
+
+.input-row {
+  display: flex;
+  gap: 12px;
+}
+
+/* INPUT */
+
+.input {
+  padding: 13px;
+  border-radius: 10px;
+  border: 1px solid #333;
+  background: #111;
+  color: white;
+  width: 100%;
+  font-size: 14px;
+  transition: 0.2s;
+}
+
+.input:focus {
+  border-color: #00ff88;
+  outline: none;
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.4);
+}
+
+/* BUTTON */
+
+.btn {
+  padding: 12px 22px;
+  border-radius: 10px;
+  border: none;
+  background: #00ff88;
+  color: black;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.25s;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 255, 136, 0.35);
+}
+
+/* BUTTON ROW */
+
+.btn-row {
+  margin-top: 20px;
+  display: flex;
+  gap: 12px;
+}
+
+/* KEYWORD GRID */
+
+.keyword-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 15px;
+}
+
+.keyword-grid input {
+  flex: 1 1 200px;
+}
+
+/* SCENE */
+
+.scene {
+  margin-top: 25px;
+}
+
+.scene h4 {
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: #00ff88;
+}
+
+/* CLIP GRID */
+
+.clip-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 15px;
+  margin-top: 10px;
+}
+
+/* VIDEO */
+
+.clip {
+  width: 100%;
+  aspect-ratio: 9/16;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid #333;
+  cursor: pointer;
+  transition: 0.25s;
+}
+
+.clip:hover {
+  transform: scale(1.04);
+  border-color: #00ff88;
+}
+
+/* SELECTED */
+
+.selected {
+  border: 3px solid #00ff88;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.5);
+}
+
+/* GENERATE SECTION */
+
+.generate-section {
+  margin-top: 40px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+/* GENERATE BUTTON */
+
+.generate-btn {
+  padding: 15px 36px;
+  background: #00ff88;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.25s;
+}
+
+.generate-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 255, 136, 0.4);
+}
+
+/* DOWNLOAD BUTTON */
+
+.download-btn {
+  padding: 15px 36px;
+  background: #1c1c1c;
+  color: white;
+  border: 1px solid #333;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: 0.25s;
+}
+
+.download-btn:hover {
+  border-color: #00ff88;
+}
+
+/* AUTH */
+
+.auth-container,
+.setup-container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #0f0f0f;
+}
+
+.auth-card,
+.setup-card {
+  background: #161616;
+  padding: 40px;
+  width: 380px;
+  border-radius: 14px;
+  border: 1px solid #2a2a2a;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.auth-title,
+.setup-title {
+  margin-bottom: 25px;
+  font-size: 24px;
+}
+
+.auth-input,
+.setup-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #0f0f0f;
+  color: white;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
+.auth-input:focus,
+.setup-input:focus {
+  border-color: #00ff88;
+  outline: none;
+}
+
+/* AUTH BUTTONS */
+
+.auth-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.auth-btn,
+.setup-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  background: #00ff88;
+  color: black;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.25s;
+}
+
+.auth-btn:hover,
+.setup-btn:hover {
+  background: black;
+  color: #00ff88;
+  border: 1px solid #00ff88;
+}
+
+/* NAVBAR */
+
+.navbar {
+  margin-top: -40px;
+  width: 100%;
+  height: 100px;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 35px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #1f1f1f;
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.logo {
+  height: 100px;
+  object-fit: contain;
+}
+
+/* NAV LINKS */
+
+.navbar-right {
+  display: flex;
+  gap: 30px;
+}
+
+.navbar-right a {
+  color: #ddd;
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.navbar-right a:hover {
+  color: #00ff88;
+}
