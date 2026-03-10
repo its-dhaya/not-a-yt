@@ -1,17 +1,39 @@
-const BASE_URL = "http://localhost:3000";
+import { supabase } from "../supabaseClient";
+
+const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
+
+/* -------------------------
+   SECURITY: get JWT token from Supabase session
+   This is sent as Bearer token — server verifies it
+   and fetches API keys itself. Keys never leave the server.
+------------------------- */
+
+const getAuthHeader = async () => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("Not authenticated. Please log in again.");
+  }
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${session.access_token}`,
+  };
+};
 
 /* -------------------------
    GENERATE SCRIPT
 ------------------------- */
 
-export const generateScriptAPI = async (topic, apiKeys) => {
+export const generateScriptAPI = async (topic) => {
+  const headers = await getAuthHeader();
+
   const res = await fetch(`${BASE_URL}/generate-script`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      topic,
-      groqKey: apiKeys.groqKey,
-    }),
+    headers,
+    body: JSON.stringify({ topic }), // no API keys sent from frontend
   });
 
   if (!res.ok) {
@@ -26,16 +48,13 @@ export const generateScriptAPI = async (topic, apiKeys) => {
    GET CLIPS
 ------------------------- */
 
-export const getClipsAPI = async (script, keywords, apiKeys) => {
+export const getClipsAPI = async (script, keywords) => {
+  const headers = await getAuthHeader();
+
   const res = await fetch(`${BASE_URL}/get-clips`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      script,
-      keywords,
-      pexelsKey: apiKeys.pexelsKey,
-      pixabayKey: apiKeys.pixabayKey,
-    }),
+    headers,
+    body: JSON.stringify({ script, keywords }), // no API keys sent from frontend
   });
 
   if (!res.ok) {
@@ -48,13 +67,14 @@ export const getClipsAPI = async (script, keywords, apiKeys) => {
 
 /* -------------------------
    GENERATE VIDEO
-   Calls /generate-video which handles TTS + render internally
 ------------------------- */
 
 export const generateVideoAPI = async (videoUrls, script) => {
+  const headers = await getAuthHeader();
+
   const res = await fetch(`${BASE_URL}/generate-video`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ videoUrls, script }),
   });
 
@@ -65,7 +85,6 @@ export const generateVideoAPI = async (videoUrls, script) => {
 
   const data = await res.json();
 
-  // Return scoped stream + download URLs using jobId from server
   return {
     ...data,
     streamUrl: `${BASE_URL}/stream/${data.jobId}`,

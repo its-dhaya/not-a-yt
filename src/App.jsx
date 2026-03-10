@@ -186,7 +186,7 @@ function App() {
     setDownloadUrl(null);
 
     try {
-      const data = await generateScriptAPI(topic, apiKeys);
+      const data = await generateScriptAPI(topic);
       setScript(data.script || []);
       setGeneratedKeywords(data.keywords || []);
     } catch (err) {
@@ -215,7 +215,7 @@ function App() {
 
   const getClips = async () => {
     try {
-      const data = await getClipsAPI(script, keywords, apiKeys);
+      const data = await getClipsAPI(script, keywords);
       setClips(data.scenes || []);
     } catch (err) {
       console.error("getClips:", err);
