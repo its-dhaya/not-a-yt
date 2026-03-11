@@ -9,6 +9,7 @@ import ApiKeySetup from "./components/ApiKeySetup";
 import Auth from "./components/Auth";
 import Landing from "./components/Landing";
 import Navbar from "./components/Navbar";
+import VoiceSelector from "./components/VoiceSelector";
 
 import { supabase } from "./supabaseClient";
 import {
@@ -93,6 +94,7 @@ function App() {
   const [checkingKeys, setCheckingKeys] = useState(true);
 
   const [selectedVoice, setSelectedVoice] = useState("en-US-JennyNeural");
+  const [loadingClips, setLoadingClips] = useState(false);
   const [rendering, setRendering] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
@@ -278,12 +280,37 @@ function App() {
   ------------------------- */
 
   const getClips = async () => {
+    setLoadingClips(true);
     try {
       const data = await getClipsAPI(script, keywords);
       setClips(data.scenes || []);
     } catch (err) {
       console.error("getClips:", err);
       showToast("Failed to fetch clips. Check your Pexels / Pixabay keys.");
+    } finally {
+      setLoadingClips(false);
+    }
+  };
+
+  // Retry a single scene with the current keyword
+  const retryScene = async (sceneIndex, keyword) => {
+    try {
+      const data = await getClipsAPI([script[sceneIndex]], [keyword]);
+      const newScene = data.scenes?.[0];
+      if (newScene) {
+        const updated = [...clips];
+        updated[sceneIndex] = newScene;
+        setClips(updated);
+        // clear previous selection for this scene
+        setSelectedClips((prev) => {
+          const next = { ...prev };
+          delete next[sceneIndex];
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error("retryScene:", err);
+      showToast("Retry failed. Try a different keyword.");
     }
   };
 
@@ -337,7 +364,7 @@ function App() {
         <Toast message={toast.message} type={toast.type} onClose={clearToast} />
       )}
 
-      <Navbar />
+      <Navbar user={user} />
       <div className="container">
         <h1 className="title">AI Video Generator</h1>
 
@@ -379,6 +406,7 @@ function App() {
           <KeywordEditor
             keywords={keywords}
             updateKeyword={updateKeyword}
+            loadingClips={loadingClips}
             getClips={() => {
               getClips();
               setStep("clips");
@@ -394,6 +422,8 @@ function App() {
               keywords={keywords}
               selectedClips={selectedClips}
               selectClip={selectClip}
+              loadingClips={loadingClips}
+              onRetryScene={retryScene}
             />
 
             {rendering && (

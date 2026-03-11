@@ -1041,3 +1041,123 @@ body {
   outline: none;
   resize: none;
 }
+
+/* ─────────────────────────────────────────
+   BUTTON SPINNER
+───────────────────────────────────────── */
+.btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.3);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─────────────────────────────────────────
+   CLIP SKELETON LOADER
+───────────────────────────────────────── */
+.clip-skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.clip-skeleton-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clip-skeleton-label {
+  width: 120px;
+  height: 14px;
+  background: var(--border-md);
+  border-radius: 6px;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.clip-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.clip-skeleton-thumb {
+  aspect-ratio: 9/16;
+  background: var(--border-md);
+  border-radius: 8px;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.clip-skeleton-thumb:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.clip-skeleton-thumb:nth-child(3) {
+  animation-delay: 0.2s;
+}
+.clip-skeleton-thumb:nth-child(4) {
+  animation-delay: 0.3s;
+}
+.clip-skeleton-thumb:nth-child(5) {
+  animation-delay: 0.4s;
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* ─────────────────────────────────────────
+   CLIP EMPTY STATE
+───────────────────────────────────────── */
+.clip-empty {
+  padding: 24px 20px;
+  border: 1px dashed var(--border-md);
+  border-radius: var(--radius);
+  text-align: center;
+  color: var(--muted-md);
+  font-size: 14px;
+  font-family: var(--font-body);
+}
+
+.clip-empty strong {
+  color: var(--text);
+}
+
+/* ─────────────────────────────────────────
+   CLIP RETRY BUTTON
+───────────────────────────────────────── */
+.clip-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 10px;
+  padding: 0;
+  transition: color 0.2s;
+}
+.clip-retry-btn:hover:not(:disabled) {
+  color: var(--accent);
+}
+.clip-retry-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+const MAX_CHARS = 120; // TTS works best under 120 chars per line
+
 function ScriptView({
   script,
   onScriptChange,
@@ -9,6 +11,7 @@ function ScriptView({
 }) {
   const [editingIndex, setEditingIndex] = useState(null);
   const [editValue, setEditValue] = useState("");
+  const [confirmRegen, setConfirmRegen] = useState(false);
 
   if (script.length === 0) return null;
 
@@ -36,6 +39,17 @@ function ScriptView({
     if (e.key === "Escape") cancelEdit();
   };
 
+  const handleRegenerate = () => {
+    if (confirmRegen) {
+      setConfirmRegen(false);
+      regenerate();
+    } else {
+      setConfirmRegen(true);
+      // auto-cancel confirm after 3s
+      setTimeout(() => setConfirmRegen(false), 3000);
+    }
+  };
+
   return (
     <div className="card">
       <div
@@ -61,65 +75,116 @@ function ScriptView({
       </div>
 
       <div className="script-list">
-        {script.map((line, index) => (
-          <div key={index} className="script-item">
-            <span className="script-num">
-              {String(index + 1).padStart(2, "0")}
-            </span>
+        {script.map((line, index) => {
+          const charCount = line.length;
+          const isOver = charCount > MAX_CHARS;
+          const isEditing = editingIndex === index;
 
-            {editingIndex === index ? (
-              /* edit mode */
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                }}
-              >
-                <textarea
-                  autoFocus
-                  className="script-edit-input"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={(e) => handleKey(e, index)}
-                  rows={2}
-                />
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    className="btn-primary"
-                    style={{ fontSize: "12px", padding: "6px 14px" }}
-                    onClick={() => saveEdit(index)}
+          return (
+            <div key={index} className="script-item">
+              <span className="script-num">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+
+              {isEditing ? (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <textarea
+                    autoFocus
+                    className="script-edit-input"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKey(e, index)}
+                    rows={2}
+                  />
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
                   >
-                    Save
-                  </button>
-                  <button
-                    className="btn-secondary"
-                    style={{ fontSize: "12px", padding: "6px 14px" }}
-                    onClick={cancelEdit}
-                  >
-                    Cancel
-                  </button>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color:
+                          editValue.length > MAX_CHARS
+                            ? "#ff5f5f"
+                            : "var(--muted)",
+                        fontFamily: "var(--font-body)",
+                      }}
+                    >
+                      {editValue.length}/{MAX_CHARS} chars
+                      {editValue.length > MAX_CHARS && " — too long for TTS"}
+                    </span>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        className="btn-primary"
+                        style={{ fontSize: "12px", padding: "6px 14px" }}
+                        onClick={() => saveEdit(index)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        style={{ fontSize: "12px", padding: "6px 14px" }}
+                        onClick={cancelEdit}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              /* view mode — click to edit */
-              <div
-                className="script-text-row"
-                onClick={() => startEdit(index)}
-                title="Click to edit"
-              >
-                <span className="script-text">{line}</span>
-                <span className="script-edit-icon">✎</span>
-              </div>
-            )}
-          </div>
-        ))}
+              ) : (
+                <div
+                  className="script-text-row"
+                  onClick={() => startEdit(index)}
+                  title="Click to edit"
+                >
+                  <div style={{ flex: 1 }}>
+                    <span className="script-text">{line}</span>
+                    {isOver && (
+                      <span
+                        style={{
+                          display: "inline-block",
+                          marginLeft: "8px",
+                          fontSize: "10px",
+                          color: "#ff5f5f",
+                          background: "#ff5f5f18",
+                          border: "1px solid #ff5f5f44",
+                          borderRadius: "4px",
+                          padding: "1px 6px",
+                          fontFamily: "var(--font-body)",
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        {charCount} chars — shorten this
+                      </span>
+                    )}
+                  </div>
+                  <span className="script-edit-icon">✎</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="script-actions">
-        <button className="btn-secondary" onClick={regenerate}>
-          Regenerate
+        <button
+          className={confirmRegen ? "btn-primary" : "btn-secondary"}
+          style={
+            confirmRegen ? { background: "#c0392b", fontSize: "13px" } : {}
+          }
+          onClick={handleRegenerate}
+        >
+          {confirmRegen ? "Sure? Click again to confirm" : "Regenerate"}
         </button>
         {hasKeywords && (
           <button className="btn-primary" onClick={showKeywords}>
