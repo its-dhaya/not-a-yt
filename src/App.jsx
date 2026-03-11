@@ -77,6 +77,7 @@ function App() {
   const [script, setScript] = useState([]);
   const [keywords, setKeywords] = useState([]);
   const [generatedKeywords, setGeneratedKeywords] = useState([]);
+  const [step, setStep] = useState("script"); // script | voice | keywords | clips
   const [clips, setClips] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedClips, setSelectedClips] = useState({});
@@ -91,6 +92,7 @@ function App() {
   const [apiKeys, setApiKeys] = useState(null);
   const [checkingKeys, setCheckingKeys] = useState(true);
 
+  const [selectedVoice, setSelectedVoice] = useState("en-US-JennyNeural");
   const [rendering, setRendering] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressText, setProgressText] = useState("");
@@ -238,6 +240,7 @@ function App() {
     setClips([]);
     setStreamUrl(null);
     setDownloadUrl(null);
+    setStep("script");
 
     try {
       const data = await generateScriptAPI(topic);
@@ -255,7 +258,14 @@ function App() {
      KEYWORDS
   ------------------------- */
 
-  const showKeywords = () => setKeywords(generatedKeywords);
+  const updateScriptLine = (updated) => setScript(updated);
+
+  const showVoice = () => setStep("voice");
+
+  const showKeywords = () => {
+    setKeywords(generatedKeywords);
+    setStep("keywords");
+  };
 
   const updateKeyword = (index, value) => {
     const updated = [...keywords];
@@ -302,7 +312,7 @@ function App() {
       setProgress(0);
       setProgressText("Starting...");
 
-      const result = await generateVideoAPI(urls, script);
+      const result = await generateVideoAPI(urls, script, selectedVoice);
 
       setProgress(100);
       setProgressText("Done!");
@@ -338,49 +348,79 @@ function App() {
           loading={loading}
         />
 
+        {/* STEP 1: Script */}
         <ScriptView
           script={script}
+          onScriptChange={updateScriptLine}
           regenerate={generateScript}
-          showKeywords={showKeywords}
+          showKeywords={showVoice}
           hasKeywords={generatedKeywords.length > 0}
         />
 
-        <KeywordEditor
-          keywords={keywords}
-          updateKeyword={updateKeyword}
-          getClips={getClips}
-        />
-
-        <ClipSelector
-          clips={clips}
-          keywords={keywords}
-          selectedClips={selectedClips}
-          selectClip={selectClip}
-        />
-
-        {rendering && (
-          <div className="card">
-            <div className="progress-wrap">
-              <div className="progress-label">
-                <span>{progressText}</span>
-                <span>{progress}%</span>
+        {/* STEP 2: Voice — shows after script Next */}
+        {(step === "voice" || step === "keywords" || step === "clips") && (
+          <>
+            <VoiceSelector
+              selectedVoice={selectedVoice}
+              onSelect={setSelectedVoice}
+            />
+            {step === "voice" && (
+              <div style={{ marginBottom: "20px" }}>
+                <button className="btn-primary" onClick={showKeywords}>
+                  Next — Edit Keywords →
+                </button>
               </div>
-              <div className="progress-track">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
 
-        <GenerateVideo
-          clips={clips}
-          generateVideo={generateVideo}
-          disabled={rendering}
-          videoReady={!!streamUrl}
-        />
+        {/* STEP 3: Keywords — shows after voice Next */}
+        {(step === "keywords" || step === "clips") && (
+          <KeywordEditor
+            keywords={keywords}
+            updateKeyword={updateKeyword}
+            getClips={() => {
+              getClips();
+              setStep("clips");
+            }}
+          />
+        )}
+
+        {/* STEP 4: Clips + Generate */}
+        {step === "clips" && (
+          <>
+            <ClipSelector
+              clips={clips}
+              keywords={keywords}
+              selectedClips={selectedClips}
+              selectClip={selectClip}
+            />
+
+            {rendering && (
+              <div className="card">
+                <div className="progress-wrap">
+                  <div className="progress-label">
+                    <span>{progressText}</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="progress-track">
+                    <div
+                      className="progress-fill"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <GenerateVideo
+              clips={clips}
+              generateVideo={generateVideo}
+              disabled={rendering}
+              videoReady={!!streamUrl}
+            />
+          </>
+        )}
 
         {streamUrl && (
           <div className="video-result">

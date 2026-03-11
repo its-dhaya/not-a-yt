@@ -870,3 +870,174 @@ body {
     padding: 32px 16px 60px;
   }
 }
+
+/* ─────────────────────────────────────────
+   VOICE SELECTOR
+───────────────────────────────────────── */
+.voice-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.voice-card {
+  position: relative;
+  background: var(--bg-input);
+  border: 1px solid var(--border-md);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.voice-card:hover {
+  border-color: var(--accent);
+}
+.voice-card--selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.voice-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.voice-accent {
+  font-size: 12px;
+  color: var(--muted-md);
+}
+
+.voice-gender {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.voice-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.voice-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--border-md);
+  color: var(--muted-md);
+  font-family: var(--font-body);
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+.voice-preview-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.voice-selected-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* animated bars for playing state */
+.voice-playing {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+}
+.voice-playing span {
+  display: block;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: voicebar 0.8s ease-in-out infinite;
+}
+.voice-playing span:nth-child(1) {
+  height: 6px;
+  animation-delay: 0s;
+}
+.voice-playing span:nth-child(2) {
+  height: 10px;
+  animation-delay: 0.15s;
+}
+.voice-playing span:nth-child(3) {
+  height: 6px;
+  animation-delay: 0.3s;
+}
+
+@keyframes voicebar {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1.2);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .voice-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ─────────────────────────────────────────
+   SCRIPT EDITING
+───────────────────────────────────────── */
+.script-text-row {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.script-text-row:hover {
+  background: var(--bg-input);
+}
+.script-text-row:hover .script-edit-icon {
+  opacity: 1;
+}
+
+.script-edit-icon {
+  font-size: 13px;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.script-edit-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 10px 14px;
+  outline: none;
+  resize: none;
+}

@@ -69,13 +69,13 @@ export const getClipsAPI = async (script, keywords) => {
    GENERATE VIDEO
 ------------------------- */
 
-export const generateVideoAPI = async (videoUrls, script) => {
+export const generateVideoAPI = async (videoUrls, script, voice) => {
   const headers = await getAuthHeader();
 
   const res = await fetch(`${BASE_URL}/generate-video`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ videoUrls, script }),
+    body: JSON.stringify({ videoUrls, script, voice }),
   });
 
   if (!res.ok) {
