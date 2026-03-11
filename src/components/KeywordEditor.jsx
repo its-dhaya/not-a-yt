@@ -3,22 +3,25 @@ function KeywordEditor({ keywords, updateKeyword, getClips }) {
 
   return (
     <div className="card">
-      <h3 className="section-title">Edit Keywords</h3>
+      <p className="card-title">Edit Keywords</p>
 
       <div className="keyword-grid">
         {keywords.map((keyword, index) => (
           <input
             key={index}
-            className="input"
+            className="keyword-input"
             value={keyword}
+            placeholder={`Scene ${index + 1}`}
             onChange={(e) => updateKeyword(index, e.target.value)}
           />
         ))}
       </div>
-      <br></br>
-      <button className="btn get-clips" onClick={getClips}>
-        Get Clips
-      </button>
+
+      <div style={{ marginTop: "20px" }}>
+        <button className="btn-primary" onClick={getClips}>
+          Get Clips
+        </button>
+      </div>
     </div>
   );
 }

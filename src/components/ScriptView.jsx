@@ -3,22 +3,26 @@ function ScriptView({ script, regenerate, showKeywords, hasKeywords }) {
 
   return (
     <div className="card">
-      <h3 className="section-title">Generated Script</h3>
+      <p className="card-title">Generated Script</p>
 
-      {script.map((line, index) => (
-        <p key={index}>
-          <b>{index + 1}.</b> {line}
-        </p>
-      ))}
+      <div className="script-list">
+        {script.map((line, index) => (
+          <div key={index} className="script-item">
+            <span className="script-num">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <span className="script-text">{line}</span>
+          </div>
+        ))}
+      </div>
 
-      <div className="btn-row">
-        <button className="btn" onClick={regenerate}>
+      <div className="script-actions">
+        <button className="btn-secondary" onClick={regenerate}>
           Regenerate
         </button>
-
         {hasKeywords && (
-          <button className="btn" onClick={showKeywords}>
-            Next
+          <button className="btn-primary" onClick={showKeywords}>
+            Next →
           </button>
         )}
       </div>

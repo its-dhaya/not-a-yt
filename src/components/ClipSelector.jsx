@@ -3,32 +3,42 @@ function ClipSelector({ clips, keywords, selectedClips, selectClip }) {
 
   return (
     <div className="card">
-      <h3 className="section-title">Select Clips</h3>
+      <p className="card-title">Select Clips</p>
 
       {clips.map((scene, index) => (
-        <div key={index} className="scene">
-          <h4>Scene {index + 1}</h4>
+        <div key={index} className="scene-block">
+          <div className="scene-header">
+            <span className="scene-label">Scene {index + 1}</span>
+            <span className="scene-keyword">{keywords[index]}</span>
+          </div>
 
-          <p className="scene-keyword">
-            Keyword: <span>{keywords[index]}</span>
-          </p>
-
-          <p>{scene.text}</p>
+          {scene.text && <p className="scene-script-text">"{scene.text}"</p>}
 
           <div className="clip-grid">
-            {scene.clips.map((clip, i) => (
-              <video
-                key={i}
-                src={clip.preview}
-                controls
-                onClick={() => selectClip(index, clip.preview)}
-                className={
-                  selectedClips[index] === clip.preview
-                    ? "clip selected"
-                    : "clip"
-                }
-              />
-            ))}
+            {scene.clips.map((clip, i) => {
+              const isSelected = selectedClips[index] === clip.preview;
+              return (
+                <div
+                  key={i}
+                  className={`clip-thumb ${isSelected ? "selected" : ""}`}
+                  onClick={() => selectClip(index, clip.preview)}
+                >
+                  <video
+                    src={clip.preview}
+                    muted
+                    loop
+                    playsInline
+                    onMouseEnter={(e) => e.target.play()}
+                    onMouseLeave={(e) => {
+                      e.target.pause();
+                      e.target.currentTime = 0;
+                    }}
+                  />
+                  {isSelected && <span className="clip-selected-badge">✓</span>}
+                  {/* <span className="clip-source-badge">{clip.source}</span> */}
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}

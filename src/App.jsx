@@ -7,6 +7,7 @@ import ClipSelector from "./components/ClipSelector";
 import GenerateVideo from "./components/GenerateVideo";
 import ApiKeySetup from "./components/ApiKeySetup";
 import Auth from "./components/Auth";
+import Landing from "./components/Landing";
 import Navbar from "./components/Navbar";
 
 import { supabase } from "./supabaseClient";
@@ -83,9 +84,11 @@ function App() {
   const [downloadUrl, setDownloadUrl] = useState(null);
 
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false); // true until session check done
 
   // Keys stored in memory (React state), never in localStorage
-  const [apiKeys, setApiKeys] = useState(null); // { groqKey, pexelsKey, pixabayKey }
+  const [apiKeys, setApiKeys] = useState(null);
   const [checkingKeys, setCheckingKeys] = useState(true);
 
   const [rendering, setRendering] = useState(false);
@@ -93,6 +96,34 @@ function App() {
   const [progressText, setProgressText] = useState("");
 
   const { toast, showToast, clearToast } = useToast();
+
+  /* -------------------------
+     RESTORE SESSION ON REFRESH
+  ------------------------- */
+
+  useEffect(() => {
+    // onAuthStateChange is the single source of truth — fires on mount,
+    // login, logout, and token refresh. No separate getSession needed.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        setUser(null);
+      } else {
+        setUser(session.user);
+      }
+      // Only set authLoading false on initial load events
+      if (
+        event === "INITIAL_SESSION" ||
+        event === "SIGNED_IN" ||
+        event === "SIGNED_OUT"
+      ) {
+        setAuthLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   /* -------------------------
      FETCH KEYS FROM SUPABASE INTO STATE
@@ -104,7 +135,12 @@ function App() {
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser();
+
       if (!currentUser) {
+        // No valid user returned — stale session (e.g. user deleted in Supabase)
+        // Force sign out and go back to landing
+        await supabase.auth.signOut();
+        setUser(null);
         setCheckingKeys(false);
         return;
       }
@@ -116,6 +152,8 @@ function App() {
         .single();
 
       if (error || !data) {
+        // Keys not found — user exists but hasn't set up keys yet
+        // Show ApiKeySetup, don't sign out
         console.error("Key fetch error:", error?.message);
         setCheckingKeys(false);
         return;
@@ -134,15 +172,17 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (user) fetchKeys();
-  }, [user, fetchKeys]);
+    if (user && !apiKeys) fetchKeys(); // only fetch if not already loaded
+  }, [user, fetchKeys, apiKeys]);
 
   /* -------------------------
      REAL SSE PROGRESS
   ------------------------- */
 
   useEffect(() => {
-    const eventSource = new EventSource("http://localhost:3000/progress");
+    const eventSource = new EventSource(
+      `${import.meta.env.VITE_SERVER_URL || "http://localhost:3000"}/progress`
+    );
 
     eventSource.onmessage = (event) => {
       try {
@@ -165,9 +205,23 @@ function App() {
      AUTH GATE
   ------------------------- */
 
-  if (!user) return <Auth onLogin={setUser} />;
+  if (authLoading)
+    return (
+      <div className="loading-screen">
+        <div className="loading-dot" />
+      </div>
+    );
+  if (!user) {
+    if (showAuth)
+      return <Auth onLogin={() => {}} onBack={() => setShowAuth(false)} />;
+    return <Landing onGetStarted={() => setShowAuth(true)} />;
+  }
   if (checkingKeys)
-    return <h2 style={{ textAlign: "center" }}>Checking API keys...</h2>;
+    return (
+      <div className="loading-screen">
+        <div className="loading-dot" />
+      </div>
+    );
   if (!apiKeys) return <ApiKeySetup onSave={fetchKeys} />;
 
   /* -------------------------
@@ -305,26 +359,18 @@ function App() {
         />
 
         {rendering && (
-          <div style={{ marginTop: "20px", textAlign: "center" }}>
-            <p>
-              {progressText} ({progress}%)
-            </p>
-            <div
-              style={{
-                width: "100%",
-                background: "#ddd",
-                borderRadius: "10px",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${progress}%`,
-                  height: "12px",
-                  background: "#4caf50",
-                  transition: "width 0.5s",
-                }}
-              />
+          <div className="card">
+            <div className="progress-wrap">
+              <div className="progress-label">
+                <span>{progressText}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="progress-track">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -337,14 +383,14 @@ function App() {
         />
 
         {streamUrl && (
-          <div style={{ marginTop: "40px", textAlign: "center" }}>
-            <h2>Final Generated Video</h2>
-            <video controls width="600" style={{ borderRadius: "10px" }}>
+          <div className="video-result">
+            <h2>Your Short is ready</h2>
+            <video controls width="360">
               <source src={streamUrl} type="video/mp4" />
             </video>
-            <div style={{ marginTop: "15px" }}>
+            <div className="video-result-actions">
               <a href={downloadUrl} download>
-                <button className="generate-btn">Download Video</button>
+                <button className="btn-primary">Download MP4</button>
               </a>
             </div>
           </div>

@@ -1,14 +1,14 @@
-import React from "react";
 import logo from "../assets/not-a-yt.png";
 
 function Navbar() {
   return (
     <nav className="navbar">
-      <div className="navbar-left">
-        <img src={logo} alt="logo" className="logo" />
-      </div>
-
-      <div className="navbar-right"></div>
+      <img
+        src={logo}
+        alt="NOT A YT"
+        className="navbar-logo"
+        style={{ height: "28px" }}
+      />
     </nav>
   );
 }
