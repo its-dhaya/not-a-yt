@@ -2,89 +2,76 @@ import { supabase } from "../supabaseClient";
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:3000";
 
-/* -------------------------
-   SECURITY: get JWT token from Supabase session
-   This is sent as Bearer token — server verifies it
-   and fetches API keys itself. Keys never leave the server.
-------------------------- */
-
+/* ── Auth header ── */
 const getAuthHeader = async () => {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-
   if (!session?.access_token) {
-    throw new Error("Not authenticated. Please log in again.");
+    // Throw a special error type so callers can detect session expiry
+    const err = new Error("Session expired. Please log in again.");
+    err.code = "SESSION_EXPIRED";
+    throw err;
   }
-
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${session.access_token}`,
   };
 };
 
-/* -------------------------
-   GENERATE SCRIPT
-------------------------- */
+/* ── Handle response — detect 401 specifically ── */
+const handleResponse = async (res) => {
+  if (res.status === 401) {
+    // Token expired mid-flow — force sign out so app redirects to login
+    await supabase.auth.signOut();
+    const err = new Error("Your session expired. Please log in again.");
+    err.code = "SESSION_EXPIRED";
+    throw err;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+};
 
+/* ── Generate Script ── */
 export const generateScriptAPI = async (topic) => {
   const headers = await getAuthHeader();
-
   const res = await fetch(`${BASE_URL}/generate-script`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ topic }), // no API keys sent from frontend
+    body: JSON.stringify({ topic }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to generate script");
-  }
-
-  return res.json();
+  return handleResponse(res);
 };
 
-/* -------------------------
-   GET CLIPS
-------------------------- */
-
+/* ── Get Clips ── */
 export const getClipsAPI = async (script, keywords) => {
   const headers = await getAuthHeader();
-
   const res = await fetch(`${BASE_URL}/get-clips`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ script, keywords }), // no API keys sent from frontend
+    body: JSON.stringify({ script, keywords }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to fetch clips");
-  }
-
-  return res.json();
+  return handleResponse(res);
 };
 
-/* -------------------------
-   GENERATE VIDEO
-------------------------- */
-
-export const generateVideoAPI = async (videoUrls, script, voice) => {
+/* ── Generate Video ── */
+export const generateVideoAPI = async (
+  videoUrls,
+  script,
+  voice,
+  themeId = "classic",
+  themeSettings = null
+) => {
   const headers = await getAuthHeader();
-
   const res = await fetch(`${BASE_URL}/generate-video`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ videoUrls, script, voice }),
+    body: JSON.stringify({ videoUrls, script, voice, themeId, themeSettings }),
   });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "Failed to generate video");
-  }
-
-  const data = await res.json();
-
+  const data = await handleResponse(res);
   return {
     ...data,
     streamUrl: `${BASE_URL}/stream/${data.jobId}`,

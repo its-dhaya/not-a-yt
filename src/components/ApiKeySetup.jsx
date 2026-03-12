@@ -76,62 +76,128 @@ const GUIDES = [
 ];
 
 const SESSION_KEY = "not-a-yt:api-key-draft";
-
-function loadDraft() {
+const loadDraft = () => {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
-    return raw
-      ? JSON.parse(raw)
-      : { groqKey: "", pexelsKey: "", pixabayKey: "" };
+    const r = sessionStorage.getItem(SESSION_KEY);
+    return r ? JSON.parse(r) : { groqKey: "", pexelsKey: "", pixabayKey: "" };
   } catch {
     return { groqKey: "", pexelsKey: "", pixabayKey: "" };
   }
-}
-
-function saveDraft(keys) {
+};
+const saveDraft = (k) => {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(keys));
-  } catch (err) {
-    console.error("Failed to save draft:", err);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(k));
+  } catch {
+    // Ignore write errors (e.g. storage full, private mode)
   }
-}
-
-function clearDraft() {
+};
+const clearDraft = () => {
   try {
     sessionStorage.removeItem(SESSION_KEY);
-  } catch (err) {
-    console.error("Failed to clear draft:", err);
+  } catch {
+    // Ignore errors
   }
+};
+
+/* ── Validate each key by making a minimal real API call ── */
+async function validateKeys(keys) {
+  const errors = {};
+
+  // Groq — minimal chat completion
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${keys.groqKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
+    });
+    if (res.status === 401) errors.groqKey = "Invalid Groq API key.";
+    else if (!res.ok && res.status !== 429)
+      errors.groqKey = `Groq error: ${res.status}`;
+  } catch {
+    errors.groqKey = "Could not reach Groq. Check your connection.";
+  }
+
+  // Pexels — minimal video search
+  try {
+    const res = await fetch(
+      "https://api.pexels.com/videos/search?query=test&per_page=1",
+      {
+        headers: { Authorization: keys.pexelsKey },
+      }
+    );
+    if (res.status === 401 || res.status === 403)
+      errors.pexelsKey = "Invalid Pexels API key.";
+    else if (!res.ok && res.status !== 429)
+      errors.pexelsKey = `Pexels error: ${res.status}`;
+  } catch {
+    errors.pexelsKey = "Could not reach Pexels. Check your connection.";
+  }
+
+  // Pixabay — minimal video search
+  try {
+    const res = await fetch(
+      `https://pixabay.com/api/videos/?key=${keys.pixabayKey}&q=test&per_page=3`
+    );
+    if (res.status === 400) errors.pixabayKey = "Invalid Pixabay API key.";
+    else if (!res.ok && res.status !== 429)
+      errors.pixabayKey = `Pixabay error: ${res.status}`;
+  } catch {
+    errors.pixabayKey = "Could not reach Pixabay. Check your connection.";
+  }
+
+  return errors;
 }
 
 export default function ApiKeySetup({ onSave }) {
   const [keys, setKeys] = useState(loadDraft);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [globalError, setGlobalError] = useState("");
   const [show, setShow] = useState({
     groqKey: false,
     pexelsKey: false,
     pixabayKey: false,
   });
+  const [validating, setValidating] = useState(false);
 
-  // Persist to sessionStorage whenever keys change
   useEffect(() => {
     saveDraft(keys);
   }, [keys]);
 
   const handleSave = async () => {
-    setError("");
+    setFieldErrors({});
+    setGlobalError("");
+
     if (!keys.groqKey || !keys.pexelsKey || !keys.pixabayKey) {
-      setError("Please enter all three API keys.");
+      setGlobalError("Please enter all three API keys.");
       return;
     }
+
+    // Step 1 — validate keys
+    setValidating(true);
+    const errors = await validateKeys(keys);
+    setValidating(false);
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
+    // Step 2 — save to Supabase
     setLoading(true);
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        setError("Not authenticated.");
+        setGlobalError("Not authenticated.");
         return;
       }
       const { error: dbError } = await supabase.from("api_keys").upsert(
@@ -144,22 +210,29 @@ export default function ApiKeySetup({ onSave }) {
         { onConflict: "user_id" }
       );
       if (dbError) {
-        setError(dbError.message);
+        setGlobalError(dbError.message);
         return;
       }
-      clearDraft(); // wipe draft on success
+      clearDraft();
       onSave();
     } catch {
-      setError("Failed to save keys. Try again.");
+      setGlobalError("Failed to save keys. Try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  const isWorking = validating || loading;
+  const btnLabel = validating
+    ? "Validating keys..."
+    : loading
+    ? "Saving..."
+    : "Save & Continue →";
+
   return (
     <div className="min-h-screen bg-zinc-950 font-sans flex flex-col">
       {/* TOP BAR */}
-      <div className="px-10 py-5 border-b border-zinc-800 flex items-center gap-3">
+      <div className="px-5 sm:px-10 py-5 border-b border-zinc-800 flex items-center gap-3">
         <span className="font-museo text-emerald-400 text-2xl font-bold tracking-wide">
           NOT A YT
         </span>
@@ -167,11 +240,14 @@ export default function ApiKeySetup({ onSave }) {
         <span className="text-zinc-500 text-[13px]">API Key Setup</span>
       </div>
 
-      <div className="flex flex-1">
+      <div className="flex flex-col md:flex-row flex-1">
         {/* LEFT — FORM */}
-        <div className="w-[480px] shrink-0 border-r border-zinc-800 px-12 py-14 flex flex-col">
-          <div className="mb-10">
-            <h1 className="font-display text-[32px] text-zinc-100 mb-2">
+        <div
+          className="w-full md:w-[480px] md:shrink-0 md:border-r border-b md:border-b-0 border-zinc-800
+                        px-5 sm:px-12 py-8 md:py-14 flex flex-col"
+        >
+          <div className="mb-8">
+            <h1 className="font-display text-[28px] sm:text-[32px] text-zinc-100 mb-2">
               Connect your APIs
             </h1>
             <p className="text-zinc-400 text-[14px] leading-relaxed">
@@ -180,9 +256,9 @@ export default function ApiKeySetup({ onSave }) {
             </p>
           </div>
 
-          {error && (
+          {globalError && (
             <p className="text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-6">
-              {error}
+              {globalError}
             </p>
           )}
 
@@ -215,12 +291,17 @@ export default function ApiKeySetup({ onSave }) {
                     type={show[f.key] ? "text" : "password"}
                     placeholder={f.placeholder}
                     value={keys[f.key]}
-                    onChange={(e) =>
-                      setKeys((p) => ({ ...p, [f.key]: e.target.value }))
-                    }
-                    className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-600
-                               rounded-xl px-4 py-3 pr-11 text-[14px] outline-none focus:border-emerald-400
-                               transition-colors"
+                    onChange={(e) => {
+                      setKeys((p) => ({ ...p, [f.key]: e.target.value }));
+                      setFieldErrors((p) => ({ ...p, [f.key]: "" }));
+                    }}
+                    className={`w-full bg-zinc-900 border text-zinc-100 placeholder-zinc-600
+                               rounded-xl px-4 py-3 pr-11 text-[14px] outline-none transition-colors
+                               ${
+                                 fieldErrors[f.key]
+                                   ? "border-red-500 focus:border-red-400"
+                                   : "border-zinc-700 focus:border-emerald-400"
+                               }`}
                   />
                   <button
                     onClick={() =>
@@ -254,7 +335,13 @@ export default function ApiKeySetup({ onSave }) {
                     )}
                   </button>
                 </div>
-                {keys[f.key] && (
+                {fieldErrors[f.key] && (
+                  <p className="text-[12px] text-red-400 mt-1.5 flex items-center gap-1.5">
+                    <span>⚠</span>
+                    {fieldErrors[f.key]}
+                  </p>
+                )}
+                {!fieldErrors[f.key] && keys[f.key] && (
                   <p className="text-[11px] text-emerald-400 mt-1.5 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
                     Key entered
@@ -266,35 +353,34 @@ export default function ApiKeySetup({ onSave }) {
 
           <button
             onClick={handleSave}
-            disabled={loading}
-            className="mt-10 w-full bg-emerald-400 text-black font-semibold text-[14px] py-3.5 rounded-xl
+            disabled={isWorking}
+            className="mt-8 w-full bg-emerald-400 text-black font-semibold text-[14px] py-3.5 rounded-xl
                        hover:opacity-85 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed
                        flex items-center justify-center gap-2"
           >
-            {loading ? (
+            {isWorking ? (
               <>
                 <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                Saving...
+                {btnLabel}
               </>
             ) : (
-              "Save & Continue →"
+              btnLabel
             )}
           </button>
         </div>
 
         {/* RIGHT — GUIDES */}
-        <div className="flex-1 px-12 py-14 overflow-y-auto">
-          <p className="text-[11px] font-semibold tracking-[0.15em] uppercase text-zinc-500 mb-8">
+        <div className="flex-1 px-5 sm:px-12 py-8 md:py-14 overflow-y-auto">
+          <p className="text-[11px] font-semibold tracking-[0.15em] uppercase text-zinc-500 mb-6 md:mb-8">
             How to get your keys
           </p>
-
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-5">
             {GUIDES.map((g) => (
               <div
                 key={g.name}
-                className={`border ${g.border} ${g.bg} rounded-2xl p-7`}
+                className={`border ${g.border} ${g.bg} rounded-2xl p-5 sm:p-7`}
               >
-                <div className="flex items-start justify-between mb-5">
+                <div className="flex items-start justify-between mb-4">
                   <div>
                     <span
                       className={`text-[11px] font-semibold tracking-widest uppercase ${g.color} mb-1 block`}
@@ -328,12 +414,11 @@ export default function ApiKeySetup({ onSave }) {
                     target="_blank"
                     rel="noreferrer"
                     className={`text-[12px] font-medium border ${g.border} ${g.color} px-4 py-1.5 rounded-full
-                               hover:opacity-75 transition-opacity whitespace-nowrap`}
+                               hover:opacity-75 transition-opacity whitespace-nowrap shrink-0`}
                   >
                     Open →
                   </a>
                 </div>
-
                 <ol className="flex flex-col gap-2.5 mb-4">
                   {g.steps.map((step, i) => (
                     <li
@@ -350,7 +435,6 @@ export default function ApiKeySetup({ onSave }) {
                     </li>
                   ))}
                 </ol>
-
                 <p className="text-[11px] text-zinc-600 border-t border-zinc-700/50 pt-4">
                   {g.note}
                 </p>

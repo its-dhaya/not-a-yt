@@ -18,7 +18,7 @@ export default function ClipSelector({
 
   if (loadingClips)
     return (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-7 mb-5">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-7 mb-5">
         <p className="text-[11px] font-semibold tracking-[0.1em] uppercase text-zinc-500 mb-6">
           Fetching Clips
         </p>
@@ -26,7 +26,7 @@ export default function ClipSelector({
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i}>
               <div className="w-28 h-3.5 bg-zinc-700 rounded animate-shimmer mb-3" />
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {Array.from({ length: 5 }).map((_, j) => (
                   <div
                     key={j}
@@ -50,7 +50,7 @@ export default function ClipSelector({
   const done = selCount === clips.length;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-7 mb-5 animate-fadeup">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-7 mb-5 animate-fadeup">
       <div className="flex items-center justify-between mb-6">
         <p className="text-[11px] font-semibold tracking-[0.1em] uppercase text-zinc-500">
           Select Clips
@@ -70,16 +70,18 @@ export default function ClipSelector({
       {clips.map((scene, i) => (
         <div
           key={i}
-          className="pb-7 mb-7 border-b border-zinc-800 last:border-0 last:mb-0 last:pb-0"
+          className="pb-6 mb-6 border-b border-zinc-800 last:border-0 last:mb-0 last:pb-0"
         >
           <div className="flex items-baseline gap-3 mb-1.5">
             <span className="text-[11px] font-semibold tracking-widest text-emerald-400 uppercase">
               Scene {i + 1}
             </span>
-            <span className="text-[13px] text-zinc-500">{keywords[i]}</span>
+            <span className="text-[13px] text-zinc-500 truncate">
+              {keywords[i]}
+            </span>
           </div>
           {scene.text && (
-            <p className="text-[13px] text-zinc-500 italic mb-4 leading-snug">
+            <p className="text-[13px] text-zinc-500 italic mb-3 leading-snug">
               "{scene.text}"
             </p>
           )}
@@ -106,7 +108,7 @@ export default function ClipSelector({
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {scene.clips.map((clip, j) => {
                   const isSel = selectedClips[i] === clip.preview;
                   return (

@@ -9,6 +9,7 @@ import Auth from "./components/Auth";
 import Landing from "./components/Landing";
 import Navbar from "./components/Navbar";
 import VoiceSelector from "./components/VoiceSelector";
+import ThemeSelector from "./components/ThemeSelector";
 import { VOICES } from "./constants/voices";
 import { supabase } from "./supabaseClient";
 import {
@@ -25,8 +26,8 @@ function Toast({ message, type, onClose }) {
   }, [onClose]);
   return (
     <div
-      className={`fixed bottom-6 right-6 z-[9999] flex items-center gap-4 px-5 py-3.5
-                     rounded-xl shadow-2xl text-[14px] max-w-sm animate-fadeup font-sans
+      className={`fixed bottom-6 right-4 left-4 sm:left-auto sm:right-6 z-[9999] flex items-center gap-4
+                     px-5 py-3.5 rounded-xl shadow-2xl text-[14px] sm:max-w-sm animate-fadeup font-sans
                      ${
                        type === "error"
                          ? "bg-red-700 text-white"
@@ -34,7 +35,10 @@ function Toast({ message, type, onClose }) {
                      }`}
     >
       <span className="flex-1">{message}</span>
-      <button onClick={onClose} className="opacity-60 hover:opacity-100">
+      <button
+        onClick={onClose}
+        className="opacity-60 hover:opacity-100 shrink-0"
+      >
         ✕
       </button>
     </div>
@@ -50,12 +54,13 @@ function useToast() {
   return { toast, showToast, clearToast };
 }
 
-/* ── Step Sidebar ── */
+/* ── Step Sidebar (desktop) ── */
 const STEPS_META = [
   { key: "script", label: "Script", desc: "Generate & edit your script" },
   { key: "voice", label: "Voice", desc: "Pick a TTS voice" },
   { key: "keywords", label: "Keywords", desc: "Edit footage search terms" },
   { key: "clips", label: "Clips", desc: "Select clips & render" },
+  { key: "theme", label: "Theme", desc: "Pick subtitle & transition style" },
 ];
 
 const TIPS = {
@@ -77,15 +82,18 @@ const TIPS = {
     "↺ Different clips if nothing looks right.",
     "Select one clip per scene before rendering.",
   ],
+  theme: [
+    "Each theme sets subtitle color, size and transition.",
+    "Classic works well for most topics.",
+    "Bold works great for dramatic facts.",
+  ],
 };
 
 function StepSidebar({ step, topic, selectedVoice }) {
   const curIdx = STEPS_META.findIndex((s) => s.key === step);
   const voice = VOICES.find((v) => v.id === selectedVoice)?.label || "Jenny";
-
   return (
     <div className="flex flex-col h-full font-sans">
-      {/* steps */}
       <div className="mb-8">
         {STEPS_META.map((s, i) => {
           const done = i < curIdx;
@@ -133,8 +141,6 @@ function StepSidebar({ step, topic, selectedVoice }) {
           );
         })}
       </div>
-
-      {/* context chips */}
       {topic && (
         <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-3.5 mb-3">
           <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-1">
@@ -153,8 +159,6 @@ function StepSidebar({ step, topic, selectedVoice }) {
           <p className="text-[13px] text-zinc-200 font-medium">{voice}</p>
         </div>
       )}
-
-      {/* tips */}
       <div className="mt-auto">
         <p className="text-[10px] uppercase tracking-widest text-zinc-600 mb-3">
           Tips
@@ -171,6 +175,50 @@ function StepSidebar({ step, topic, selectedVoice }) {
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+/* ── Mobile Step Bar ── */
+function MobileStepBar({ step }) {
+  const curIdx = STEPS_META.findIndex((s) => s.key === step);
+  return (
+    <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 border-b border-zinc-800 md:hidden">
+      {STEPS_META.map((s, i) => {
+        const done = i < curIdx;
+        const active = i === curIdx;
+        return (
+          <div key={s.key} className="flex items-center gap-1.5">
+            <div
+              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] font-bold transition-all
+              ${
+                done
+                  ? "bg-emerald-400 border-emerald-400 text-black"
+                  : active
+                  ? "border-emerald-400 text-emerald-400"
+                  : "border-zinc-700 text-zinc-600"
+              }`}
+            >
+              {done ? "✓" : i + 1}
+            </div>
+            <span
+              className={`text-[11px] font-medium hidden xs:block
+              ${
+                active
+                  ? "text-zinc-100"
+                  : done
+                  ? "text-zinc-500"
+                  : "text-zinc-700"
+              }`}
+            >
+              {s.label}
+            </span>
+            {i < STEPS_META.length - 1 && (
+              <span className="text-zinc-700 ml-1">—</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -229,6 +277,8 @@ export default function App() {
   const [step, setStep] = useState("script");
   const [clips, setClips] = useState([]);
   const [selectedClips, setSelectedClips] = useState({});
+  const [selectedTheme, setSelectedTheme] = useState("classic");
+  const [themeSettings, setThemeSettings] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingClips, setLoadingClips] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState("en-US-JennyNeural");
@@ -303,7 +353,7 @@ export default function App() {
         setProgress(d.percent);
         setProgressText(d.step);
       } catch {
-        e;
+        // Ignore malformed messages from the server
       }
     };
     return () => es.close();
@@ -340,8 +390,8 @@ export default function App() {
       const data = await generateScriptAPI(topic);
       setScript(data.script || []);
       setGeneratedKeywords(data.keywords || []);
-    } catch {
-      showToast("Script generation failed. Check your Groq key or topic.");
+    } catch (err) {
+      err, "Script generation failed. Check your Groq key or topic.";
     } finally {
       setLoading(false);
     }
@@ -363,8 +413,8 @@ export default function App() {
     try {
       const data = await getClipsAPI(script, keywords);
       setClips(data.scenes || []);
-    } catch {
-      showToast("Failed to fetch clips. Check your Pexels / Pixabay keys.");
+    } catch (err) {
+      err, "Failed to fetch clips. Check your Pexels / Pixabay keys.";
     } finally {
       setLoadingClips(false);
     }
@@ -384,8 +434,8 @@ export default function App() {
           return n;
         });
       }
-    } catch {
-      showToast("Retry failed. Try a different keyword.");
+    } catch (err) {
+      err, "Retry failed. Try a different keyword.";
     }
   };
 
@@ -401,14 +451,20 @@ export default function App() {
       setRendering(true);
       setProgress(0);
       setProgressText("Starting...");
-      const result = await generateVideoAPI(urls, script, selectedVoice);
+      const result = await generateVideoAPI(
+        urls,
+        script,
+        selectedVoice,
+        selectedTheme,
+        themeSettings
+      );
       setProgress(100);
       setProgressText("Done!");
       setStreamUrl(result.streamUrl);
       setDownloadUrl(result.downloadUrl);
       showToast("Video ready!", "success");
-    } catch {
-      showToast("Video generation failed. Check the server logs.");
+    } catch (err) {
+      err, "Video generation failed. Check the server logs.";
     } finally {
       setRendering(false);
     }
@@ -420,12 +476,13 @@ export default function App() {
         <Toast message={toast.message} type={toast.type} onClose={clearToast} />
       )}
       <Navbar user={user} />
+      <MobileStepBar step={step} />
 
       <div className="flex">
-        {/* LEFT SIDEBAR */}
+        {/* LEFT SIDEBAR — desktop only */}
         <aside
-          className="w-60 shrink-0 sticky top-16 h-[calc(100vh-64px)] overflow-y-auto
-                          border-r border-zinc-800 px-6 py-8"
+          className="hidden md:block w-60 shrink-0 sticky top-16 h-[calc(100vh-64px)]
+                          overflow-y-auto border-r border-zinc-800 px-6 py-8"
         >
           <StepSidebar
             step={step}
@@ -435,8 +492,8 @@ export default function App() {
         </aside>
 
         {/* MAIN */}
-        <main className="flex-1 min-w-0 px-10 py-10">
-          <h1 className="font-display text-[38px] tracking-tight text-zinc-100 mb-8">
+        <main className="flex-1 min-w-0 px-4 py-6 sm:px-6 md:px-10 md:py-10">
+          <h1 className="font-display text-[28px] sm:text-[38px] tracking-tight text-zinc-100 mb-6 md:mb-8">
             AI Video Generator
           </h1>
 
@@ -455,7 +512,7 @@ export default function App() {
             hasKeywords={generatedKeywords.length > 0}
           />
 
-          {["voice", "keywords", "clips"].includes(step) && (
+          {["voice", "keywords", "clips", "theme"].includes(step) && (
             <>
               <VoiceSelector
                 selectedVoice={selectedVoice}
@@ -473,7 +530,7 @@ export default function App() {
             </>
           )}
 
-          {["keywords", "clips"].includes(step) && (
+          {["keywords", "clips", "theme"].includes(step) && (
             <KeywordEditor
               keywords={keywords}
               updateKeyword={updateKeyword}
@@ -485,7 +542,7 @@ export default function App() {
             />
           )}
 
-          {step === "clips" && (
+          {["clips", "theme"].includes(step) && (
             <>
               <ClipSelector
                 clips={clips}
@@ -495,6 +552,36 @@ export default function App() {
                 loadingClips={loadingClips}
                 onRetryScene={retryScene}
               />
+
+              {step === "clips" &&
+                Object.keys(selectedClips).length === clips.length &&
+                clips.length > 0 && (
+                  <button
+                    onClick={() => setStep("theme")}
+                    className="mb-5 bg-emerald-400 text-black font-semibold text-[13px] px-6 py-3
+                             rounded-xl hover:opacity-85 hover:-translate-y-px transition-all"
+                  >
+                    Next — Pick Theme →
+                  </button>
+                )}
+
+              {step === "theme" && (
+                <ThemeSelector
+                  selectedTheme={selectedTheme}
+                  customSettings={themeSettings}
+                  onSelect={setSelectedTheme}
+                  onSettingsChange={setThemeSettings}
+                />
+              )}
+
+              {(step === "theme" || !!streamUrl) && (
+                <GenerateVideo
+                  clips={clips}
+                  generateVideo={generateVideo}
+                  disabled={rendering}
+                  videoReady={!!streamUrl}
+                />
+              )}
 
               {rendering && (
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-5">
@@ -511,28 +598,21 @@ export default function App() {
                 </div>
               )}
 
-              <GenerateVideo
-                clips={clips}
-                generateVideo={generateVideo}
-                disabled={rendering}
-                videoReady={!!streamUrl}
-              />
-
               {streamUrl && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 mb-5 text-center animate-fadeup">
-                  <h2 className="font-display text-[26px] text-zinc-100 mb-6">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sm:p-8 mb-5 text-center animate-fadeup">
+                  <h2 className="font-display text-[22px] sm:text-[26px] text-zinc-100 mb-6">
                     Your Short is ready 🎬
                   </h2>
                   <video
                     controls
-                    className="mx-auto rounded-2xl border border-zinc-700"
+                    className="mx-auto rounded-2xl border border-zinc-700 w-full sm:w-auto"
                     style={{ maxWidth: "320px" }}
                   >
                     <source src={streamUrl} type="video/mp4" />
                   </video>
                   <div className="mt-5">
                     <a href={downloadUrl} download>
-                      <button className="bg-emerald-400 text-black font-semibold text-[14px] px-8 py-3 rounded-xl hover:opacity-85 transition-opacity">
+                      <button className="w-full sm:w-auto bg-emerald-400 text-black font-semibold text-[14px] px-8 py-3 rounded-xl hover:opacity-85 transition-opacity">
                         Download MP4
                       </button>
                     </a>
@@ -543,10 +623,10 @@ export default function App() {
           )}
         </main>
 
-        {/* RIGHT PANEL — xl screens only */}
+        {/* RIGHT PANEL — xl only */}
         <aside
-          className="w-52 shrink-0 sticky top-16 h-[calc(100vh-64px)] overflow-y-auto
-                          border-l border-zinc-800 px-6 py-8 hidden xl:block"
+          className="hidden xl:block w-52 shrink-0 sticky top-16 h-[calc(100vh-64px)]
+                          overflow-y-auto border-l border-zinc-800 px-6 py-8"
         >
           <RightPanel
             script={script}
