@@ -76,7 +76,7 @@ export default function Landing({ onGetStarted }) {
         className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-12 py-4
                       bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800"
       >
-        <span className="text-emerald-400 font-semibold tracking-widest text-sm">
+        <span className="font-museo text-emerald-400 text-2xl font-bold tracking-wide">
           NOT A YT
         </span>
         <button
@@ -237,7 +237,7 @@ export default function Landing({ onGetStarted }) {
 
       {/* FOOTER */}
       <footer className="px-12 py-7 border-t border-zinc-800 flex items-center justify-between">
-        <span className="text-emerald-400 font-semibold tracking-widest text-sm">
+        <span className="font-museo text-emerald-400 text-2xl font-bold tracking-wide">
           NOT A YT
         </span>
         <span className="text-zinc-600 text-[13px]">

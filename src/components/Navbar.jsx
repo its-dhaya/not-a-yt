@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
-import logo from "../assets/not-a-yt.png";
 
 export default function Navbar({ user }) {
   const [signingOut, setSigningOut] = useState(false);
@@ -15,7 +14,9 @@ export default function Navbar({ user }) {
       className="sticky top-0 z-50 flex items-center justify-between px-8 py-4
                     bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800"
     >
-      <img src={logo} alt="NOT A YT" className="h-7" />
+      <span className="font-museo text-emerald-400 text-2xl font-bold tracking-wide">
+        NOT A YT
+      </span>
       {user && (
         <div className="flex items-center gap-4">
           <span className="text-[13px] text-zinc-500 hidden sm:block">

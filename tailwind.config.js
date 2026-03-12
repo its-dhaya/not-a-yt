@@ -6,6 +6,7 @@ export default {
       fontFamily: {
         sans: ["DM Sans", "system-ui", "sans-serif"],
         display: ["DM Serif Display", "Georgia", "serif"],
+        museo: ["Museomoderno", "sans-serif"],
       },
       keyframes: {
         shimmer: { "0%,100%": { opacity: "0.4" }, "50%": { opacity: "0.85" } },
