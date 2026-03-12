@@ -2,9 +2,8 @@ import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import logo from "../assets/not-a-yt.png";
 
-function Navbar({ user }) {
+export default function Navbar({ user }) {
   const [signingOut, setSigningOut] = useState(false);
-
   const handleLogout = async () => {
     setSigningOut(true);
     await supabase.auth.signOut();
@@ -12,29 +11,21 @@ function Navbar({ user }) {
   };
 
   return (
-    <nav className="navbar">
-      <img
-        src={logo}
-        alt="NOT A YT"
-        className="navbar-logo"
-        style={{ height: "28px" }}
-      />
+    <nav
+      className="sticky top-0 z-50 flex items-center justify-between px-8 py-4
+                    bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800"
+    >
+      <img src={logo} alt="NOT A YT" className="h-7" />
       {user && (
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <span
-            style={{
-              fontSize: "13px",
-              color: "var(--muted-md)",
-              fontFamily: "var(--font-body)",
-            }}
-          >
+        <div className="flex items-center gap-4">
+          <span className="text-[13px] text-zinc-500 hidden sm:block">
             {user.email}
           </span>
           <button
-            className="btn-secondary"
-            style={{ fontSize: "12px", padding: "7px 16px" }}
             onClick={handleLogout}
             disabled={signingOut}
+            className="text-[12px] font-medium border border-zinc-700 text-zinc-300 px-4 py-2 rounded-xl
+                       hover:border-emerald-400 hover:text-emerald-400 transition-colors disabled:opacity-40"
           >
             {signingOut ? "Signing out..." : "Sign Out"}
           </button>
@@ -43,5 +34,3 @@ function Navbar({ user }) {
     </nav>
   );
 }
-
-export default Navbar;

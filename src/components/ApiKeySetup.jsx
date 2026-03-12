@@ -1,54 +1,66 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 
-function ApiKeySetup({ onSave }) {
-  const [pexelsKey, setPexelsKey] = useState("");
-  const [groqKey, setGroqKey] = useState("");
-  const [pixabayKey, setPixabayKey] = useState("");
+const FIELDS = [
+  {
+    key: "groqKey",
+    label: "Groq API Key",
+    placeholder: "gsk_...",
+    link: "https://console.groq.com/keys",
+  },
+  {
+    key: "pexelsKey",
+    label: "Pexels API Key",
+    placeholder: "Pexels key",
+    link: "https://www.pexels.com/api/",
+  },
+  {
+    key: "pixabayKey",
+    label: "Pixabay API Key",
+    placeholder: "Pixabay key",
+    link: "https://pixabay.com/api/docs/",
+  },
+];
+
+export default function ApiKeySetup({ onSave }) {
+  const [keys, setKeys] = useState({
+    groqKey: "",
+    pexelsKey: "",
+    pixabayKey: "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSave = async () => {
     setError("");
-
-    if (!pexelsKey || !groqKey || !pixabayKey) {
+    if (!keys.groqKey || !keys.pexelsKey || !keys.pixabayKey) {
       setError("Please enter all three API keys.");
       return;
     }
-
+    setLoading(true);
     try {
-      setLoading(true);
-
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
       if (!user) {
-        setError("User not authenticated.");
+        setError("Not authenticated.");
         return;
       }
-
-      // Upsert so re-saving works without duplicate errors
       const { error: dbError } = await supabase.from("api_keys").upsert(
         {
           user_id: user.id,
-          groq_key: groqKey,
-          pexels_key: pexelsKey,
-          pixabay_key: pixabayKey,
+          groq_key: keys.groqKey,
+          pexels_key: keys.pexelsKey,
+          pixabay_key: keys.pixabayKey,
         },
         { onConflict: "user_id" }
       );
-
       if (dbError) {
-        console.error("DB error:", dbError);
         setError(dbError.message);
         return;
       }
-
-      // No localStorage — App will fetch keys from Supabase into state
       onSave();
-    } catch (err) {
-      console.error("handleSave failed:", err);
+    } catch {
       setError("Failed to save keys. Try again.");
     } finally {
       setLoading(false);
@@ -56,45 +68,61 @@ function ApiKeySetup({ onSave }) {
   };
 
   return (
-    <div className="setup-container">
-      <div className="setup-card">
-        <h1 className="setup-title">Setup API Keys</h1>
+    <div className="min-h-screen bg-zinc-950 font-sans flex items-center justify-center px-6">
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-10">
+        <p className="text-emerald-400 text-[12px] font-semibold tracking-widest mb-7">
+          NOT A YT
+        </p>
+        <h1 className="font-display text-[28px] text-zinc-100 mb-2">
+          Setup API Keys
+        </h1>
+        <p className="text-zinc-400 text-[14px] mb-8">
+          Your keys are stored securely and never shared.
+        </p>
 
         {error && (
-          <p
-            style={{ color: "#c0392b", marginBottom: "12px", fontSize: "14px" }}
-          >
+          <p className="text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 mb-5">
             {error}
           </p>
         )}
 
-        <input
-          className="setup-input"
-          placeholder="Enter Groq API Key"
-          value={groqKey}
-          onChange={(e) => setGroqKey(e.target.value)}
-        />
+        {FIELDS.map((f) => (
+          <div key={f.key} className="mb-4">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[12px] font-medium text-zinc-400 tracking-wide">
+                {f.label}
+              </label>
+              <a
+                href={f.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-emerald-400 hover:opacity-75 transition-opacity"
+              >
+                Get key →
+              </a>
+            </div>
+            <input
+              type="password"
+              placeholder={f.placeholder}
+              value={keys[f.key]}
+              onChange={(e) =>
+                setKeys((p) => ({ ...p, [f.key]: e.target.value }))
+              }
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-600
+                         rounded-xl px-4 py-3 text-[14px] outline-none focus:border-emerald-400 transition-colors"
+            />
+          </div>
+        ))}
 
-        <input
-          className="setup-input"
-          placeholder="Enter Pexels API Key"
-          value={pexelsKey}
-          onChange={(e) => setPexelsKey(e.target.value)}
-        />
-
-        <input
-          className="setup-input"
-          placeholder="Enter Pixabay API Key"
-          value={pixabayKey}
-          onChange={(e) => setPixabayKey(e.target.value)}
-        />
-
-        <button className="setup-btn" onClick={handleSave} disabled={loading}>
+        <button
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full mt-4 bg-emerald-400 text-black font-semibold text-[14px] py-3 rounded-xl
+                     hover:opacity-85 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+        >
           {loading ? "Saving..." : "Save Keys"}
         </button>
       </div>
     </div>
   );
 }
-
-export default ApiKeySetup;

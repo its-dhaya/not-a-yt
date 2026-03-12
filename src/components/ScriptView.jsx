@@ -1,193 +1,145 @@
 import { useState } from "react";
+const MAX = 120;
 
-const MAX_CHARS = 120; // TTS works best under 120 chars per line
-
-function ScriptView({
+export default function ScriptView({
   script,
   onScriptChange,
   regenerate,
   showKeywords,
   hasKeywords,
 }) {
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [editValue, setEditValue] = useState("");
+  const [editIdx, setEditIdx] = useState(null);
+  const [editVal, setEditVal] = useState("");
   const [confirmRegen, setConfirmRegen] = useState(false);
 
-  if (script.length === 0) return null;
+  if (!script.length) return null;
 
-  const startEdit = (index) => {
-    setEditingIndex(index);
-    setEditValue(script[index]);
+  const startEdit = (i) => {
+    setEditIdx(i);
+    setEditVal(script[i]);
   };
-
-  const saveEdit = (index) => {
-    if (editValue.trim()) {
-      const updated = [...script];
-      updated[index] = editValue.trim();
-      onScriptChange(updated);
+  const saveEdit = (i) => {
+    if (editVal.trim()) {
+      const u = [...script];
+      u[i] = editVal.trim();
+      onScriptChange(u);
     }
-    setEditingIndex(null);
+    setEditIdx(null);
   };
-
-  const cancelEdit = () => {
-    setEditingIndex(null);
-    setEditValue("");
-  };
-
-  const handleKey = (e, index) => {
-    if (e.key === "Enter" && !e.shiftKey) saveEdit(index);
+  const cancelEdit = () => setEditIdx(null);
+  const onKey = (e, i) => {
+    if (e.key === "Enter" && !e.shiftKey) saveEdit(i);
     if (e.key === "Escape") cancelEdit();
   };
 
-  const handleRegenerate = () => {
+  const handleRegen = () => {
     if (confirmRegen) {
       setConfirmRegen(false);
       regenerate();
     } else {
       setConfirmRegen(true);
-      // auto-cancel confirm after 3s
       setTimeout(() => setConfirmRegen(false), 3000);
     }
   };
 
   return (
-    <div className="card">
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "20px",
-        }}
-      >
-        <p className="card-title" style={{ marginBottom: 0 }}>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-7 mb-5 animate-fadeup">
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-[11px] font-semibold tracking-[0.1em] uppercase text-zinc-500">
           Generated Script
         </p>
-        <span
-          style={{
-            fontSize: "12px",
-            color: "var(--muted)",
-            fontFamily: "var(--font-body)",
-          }}
-        >
+        <span className="text-[12px] text-zinc-600">
           Click any line to edit
         </span>
       </div>
 
-      <div className="script-list">
-        {script.map((line, index) => {
-          const charCount = line.length;
-          const isOver = charCount > MAX_CHARS;
-          const isEditing = editingIndex === index;
-
-          return (
-            <div key={index} className="script-item">
-              <span className="script-num">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-
-              {isEditing ? (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                  }}
-                >
-                  <textarea
-                    autoFocus
-                    className="script-edit-input"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onKeyDown={(e) => handleKey(e, index)}
-                    rows={2}
-                  />
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
+      <div className="divide-y divide-zinc-800">
+        {script.map((line, i) => (
+          <div
+            key={i}
+            className="grid py-3.5 gap-4"
+            style={{ gridTemplateColumns: "32px 1fr" }}
+          >
+            <span className="font-display text-[12px] text-zinc-600 pt-0.5">
+              {String(i + 1).padStart(2, "0")}
+            </span>
+            {editIdx === i ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={editVal}
+                  onChange={(e) => setEditVal(e.target.value)}
+                  onKeyDown={(e) => onKey(e, i)}
+                  className="w-full bg-zinc-800 border border-emerald-400 rounded-xl px-4 py-2.5
+                             text-zinc-100 text-[14px] leading-snug outline-none resize-none"
+                />
+                <div className="flex items-center justify-between">
+                  <span
+                    className={`text-[11px] ${
+                      editVal.length > MAX ? "text-red-400" : "text-zinc-600"
+                    }`}
                   >
-                    <span
-                      style={{
-                        fontSize: "11px",
-                        color:
-                          editValue.length > MAX_CHARS
-                            ? "#ff5f5f"
-                            : "var(--muted)",
-                        fontFamily: "var(--font-body)",
-                      }}
+                    {editVal.length}/{MAX}
+                    {editVal.length > MAX && " — too long for TTS"}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveEdit(i)}
+                      className="bg-emerald-400 text-black text-[12px] font-semibold px-4 py-1.5 rounded-lg hover:opacity-85 transition-opacity"
                     >
-                      {editValue.length}/{MAX_CHARS} chars
-                      {editValue.length > MAX_CHARS && " — too long for TTS"}
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="border border-zinc-700 text-zinc-300 text-[12px] px-4 py-1.5 rounded-lg hover:border-emerald-400 hover:text-emerald-400 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                onClick={() => startEdit(i)}
+                className="group flex items-start justify-between gap-3 cursor-pointer -mx-2 px-2 py-1 rounded-lg hover:bg-zinc-800 transition-colors"
+              >
+                <div className="flex-1">
+                  <span className="text-zinc-200 text-[14px] leading-snug">
+                    {line}
+                  </span>
+                  {line.length > MAX && (
+                    <span className="ml-2 inline-block text-[10px] text-red-400 bg-red-500/10 border border-red-500/30 rounded px-1.5 py-0.5 align-middle">
+                      {line.length} chars — shorten
                     </span>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button
-                        className="btn-primary"
-                        style={{ fontSize: "12px", padding: "6px 14px" }}
-                        onClick={() => saveEdit(index)}
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="btn-secondary"
-                        style={{ fontSize: "12px", padding: "6px 14px" }}
-                        onClick={cancelEdit}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              ) : (
-                <div
-                  className="script-text-row"
-                  onClick={() => startEdit(index)}
-                  title="Click to edit"
-                >
-                  <div style={{ flex: 1 }}>
-                    <span className="script-text">{line}</span>
-                    {isOver && (
-                      <span
-                        style={{
-                          display: "inline-block",
-                          marginLeft: "8px",
-                          fontSize: "10px",
-                          color: "#ff5f5f",
-                          background: "#ff5f5f18",
-                          border: "1px solid #ff5f5f44",
-                          borderRadius: "4px",
-                          padding: "1px 6px",
-                          fontFamily: "var(--font-body)",
-                          verticalAlign: "middle",
-                        }}
-                      >
-                        {charCount} chars — shorten this
-                      </span>
-                    )}
-                  </div>
-                  <span className="script-edit-icon">✎</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                <span className="text-zinc-600 text-[13px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0 pt-0.5">
+                  ✎
+                </span>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
-      <div className="script-actions">
+      <div className="flex gap-3 mt-6">
         <button
-          className={confirmRegen ? "btn-primary" : "btn-secondary"}
-          style={
-            confirmRegen ? { background: "#c0392b", fontSize: "13px" } : {}
-          }
-          onClick={handleRegenerate}
+          onClick={handleRegen}
+          className={`text-[13px] font-medium px-5 py-2.5 rounded-xl border transition-colors
+            ${
+              confirmRegen
+                ? "bg-red-600 border-red-600 text-white"
+                : "border-zinc-700 text-zinc-300 hover:border-emerald-400 hover:text-emerald-400"
+            }`}
         >
           {confirmRegen ? "Sure? Click again to confirm" : "Regenerate"}
         </button>
         {hasKeywords && (
-          <button className="btn-primary" onClick={showKeywords}>
+          <button
+            onClick={showKeywords}
+            className="bg-emerald-400 text-black font-semibold text-[13px] px-5 py-2.5 rounded-xl hover:opacity-85 hover:-translate-y-px transition-all"
+          >
             Next — Pick Voice →
           </button>
         )}
@@ -195,5 +147,3 @@ function ScriptView({
     </div>
   );
 }
-
-export default ScriptView;
