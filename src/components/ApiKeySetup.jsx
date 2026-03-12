@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../supabaseClient";
 
 const FIELDS = [
@@ -75,12 +75,37 @@ const GUIDES = [
   },
 ];
 
+const SESSION_KEY = "not-a-yt:api-key-draft";
+
+function loadDraft() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw
+      ? JSON.parse(raw)
+      : { groqKey: "", pexelsKey: "", pixabayKey: "" };
+  } catch {
+    return { groqKey: "", pexelsKey: "", pixabayKey: "" };
+  }
+}
+
+function saveDraft(keys) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(keys));
+  } catch (err) {
+    console.error("Failed to save draft:", err);
+  }
+}
+
+function clearDraft() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch (err) {
+    console.error("Failed to clear draft:", err);
+  }
+}
+
 export default function ApiKeySetup({ onSave }) {
-  const [keys, setKeys] = useState({
-    groqKey: "",
-    pexelsKey: "",
-    pixabayKey: "",
-  });
+  const [keys, setKeys] = useState(loadDraft);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [show, setShow] = useState({
@@ -88,6 +113,11 @@ export default function ApiKeySetup({ onSave }) {
     pexelsKey: false,
     pixabayKey: false,
   });
+
+  // Persist to sessionStorage whenever keys change
+  useEffect(() => {
+    saveDraft(keys);
+  }, [keys]);
 
   const handleSave = async () => {
     setError("");
@@ -117,6 +147,7 @@ export default function ApiKeySetup({ onSave }) {
         setError(dbError.message);
         return;
       }
+      clearDraft(); // wipe draft on success
       onSave();
     } catch {
       setError("Failed to save keys. Try again.");
