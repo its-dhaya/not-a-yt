@@ -11,6 +11,7 @@ import Navbar from "./components/Navbar";
 import VoiceSelector from "./components/VoiceSelector";
 import ThemeSelector from "./components/ThemeSelector";
 import TtsPage from "./components/TtsPage";
+import ManualEditor from "./components/ManualEditor";
 import { VOICES } from "./constants/voices";
 import { supabase } from "./supabaseClient";
 import {
@@ -409,6 +410,19 @@ export default function App() {
       </>
     );
 
+  // Manual editor tool
+  if (currentTool === "manual-editor")
+    return (
+      <>
+        <Navbar
+          user={user}
+          onGoHome={() => setShowLanding(true)}
+          onNavigate={(id) => navigate(id)}
+        />
+        <ManualEditor />
+      </>
+    );
+
   // TTS tool
   if (currentTool === "tts")
     return (
@@ -520,15 +534,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans pt-16">
+    <div className="min-h-screen bg-zinc-950 font-sans">
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={clearToast} />
       )}
-      <Navbar
-        user={user}
-        onGoHome={() => setShowLanding(true)}
-        onNavigate={(id) => navigate(id)}
-      />
+      <Navbar user={user} />
       <MobileStepBar step={step} />
 
       <div className="flex">

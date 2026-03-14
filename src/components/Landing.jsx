@@ -23,7 +23,7 @@ const PRODUCTS = [
   },
   {
     id: "manual-editor",
-    label: "Soon",
+    label: "Live",
     labelColor: "text-zinc-400 bg-zinc-800 border-zinc-700",
     icon: (
       <svg
@@ -447,7 +447,7 @@ export default function Landing({ onGetStarted, onNavigate, user }) {
                   {
                     id: "manual-editor",
                     name: "Manual Editor",
-                    label: "Soon",
+                    label: "Live",
                     icon: "✏",
                   },
                   {
