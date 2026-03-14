@@ -24,7 +24,7 @@ const PRODUCTS = [
   {
     id: "manual-editor",
     label: "Live",
-    labelColor: "text-zinc-400 bg-zinc-800 border-zinc-700",
+    labelColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
     icon: (
       <svg
         width="22"

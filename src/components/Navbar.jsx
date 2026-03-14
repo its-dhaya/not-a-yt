@@ -43,8 +43,8 @@ const PRODUCTS = [
   },
   {
     id: "manual-editor",
-    label: "Soon",
-    labelColor: "text-zinc-500 bg-zinc-800 border-zinc-700",
+    label: "Live",
+    labelColor: "text-emerald-400 bg-emerald-400/10 border-emerald-400/20",
     icon: (
       <svg
         width="18"
