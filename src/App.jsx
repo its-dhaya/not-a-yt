@@ -10,6 +10,7 @@ import Landing from "./components/Landing";
 import Navbar from "./components/Navbar";
 import VoiceSelector from "./components/VoiceSelector";
 import ThemeSelector from "./components/ThemeSelector";
+import TtsPage from "./components/TtsPage";
 import { VOICES } from "./constants/voices";
 import { supabase } from "./supabaseClient";
 import {
@@ -288,6 +289,8 @@ export default function App() {
   const [streamUrl, setStreamUrl] = useState(null);
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [user, setUser] = useState(null);
+  const [currentTool, setCurrentTool] = useState("shorts-maker");
+  const [showLanding, setShowLanding] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
   const [apiKeys, setApiKeys] = useState(null);
@@ -353,7 +356,7 @@ export default function App() {
         setProgress(d.percent);
         setProgressText(d.step);
       } catch {
-        // Ignore malformed messages from the server
+        //
       }
     };
     return () => es.close();
@@ -365,12 +368,58 @@ export default function App() {
     </div>
   );
 
+  // Must be defined before early returns so Navbar callbacks work
+  const navigate = (id) => {
+    setShowLanding(false);
+    setCurrentTool(id);
+  };
+
   if (authLoading) return <Spinner />;
-  if (!user)
-    return showAuth ? (
-      <Auth onLogin={() => {}} onBack={() => setShowAuth(false)} />
-    ) : (
-      <Landing onGetStarted={() => setShowAuth(true)} />
+  // Not logged in
+  if (!user) {
+    if (showAuth)
+      return <Auth onLogin={() => {}} onBack={() => setShowAuth(false)} />;
+    return (
+      <>
+        <Navbar
+          user={null}
+          onGoHome={() => {}}
+          onGetStarted={() => setShowAuth(true)}
+        />
+        <Landing onGetStarted={() => setShowAuth(true)} />
+      </>
+    );
+  }
+
+  // Logged in but viewing landing
+  if (showLanding)
+    return (
+      <>
+        <Navbar
+          user={user}
+          onGoHome={() => setShowLanding(true)}
+          onNavigate={(id) => navigate(id)}
+          onGetStarted={() => setShowLanding(false)}
+        />
+        <Landing
+          user={user}
+          onGetStarted={() => setShowLanding(false)}
+          onNavigate={(id) => navigate(id)}
+        />
+      </>
+    );
+
+  // TTS tool
+  if (currentTool === "tts")
+    return (
+      <>
+        <Navbar
+          user={user}
+          onGoHome={() => setShowLanding(true)}
+          onNavigate={(id) => navigate(id)}
+        />
+        <TtsPage />
+      </>
     );
   if (checkingKeys) return <Spinner />;
   if (!apiKeys) return <ApiKeySetup onSave={fetchKeys} />;
@@ -471,11 +520,15 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans">
+    <div className="min-h-screen bg-zinc-950 font-sans pt-16">
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={clearToast} />
       )}
-      <Navbar user={user} />
+      <Navbar
+        user={user}
+        onGoHome={() => setShowLanding(true)}
+        onNavigate={(id) => navigate(id)}
+      />
       <MobileStepBar step={step} />
 
       <div className="flex">
@@ -553,6 +606,21 @@ export default function App() {
                 onRetryScene={retryScene}
               />
 
+              {rendering && (
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-5">
+                  <div className="flex justify-between text-[13px] text-zinc-400 mb-3">
+                    <span>{progressText}</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 rounded-full transition-all duration-500"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {step === "clips" &&
                 Object.keys(selectedClips).length === clips.length &&
                 clips.length > 0 && (
@@ -581,21 +649,6 @@ export default function App() {
                   disabled={rendering}
                   videoReady={!!streamUrl}
                 />
-              )}
-
-              {rendering && (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-5">
-                  <div className="flex justify-between text-[13px] text-zinc-400 mb-3">
-                    <span>{progressText}</span>
-                    <span>{progress}%</span>
-                  </div>
-                  <div className="w-full h-1 bg-zinc-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                </div>
               )}
 
               {streamUrl && (
