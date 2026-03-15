@@ -182,6 +182,25 @@ export function TopBar({ store }) {
       className="flex items-center h-12 px-3 border-b border-zinc-800/80 bg-[#0a0a0c] shrink-0 gap-1 overflow-x-auto"
       style={{ scrollbarWidth: "none", position: "relative", zIndex: 200 }}
     >
+      {/* ── Home button ── */}
+      <Tip label="Back to Home">
+        <button
+          onClick={() => (window.location.href = "/")}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-zinc-800
+                     text-zinc-400 hover:text-white hover:bg-zinc-800 hover:border-zinc-700
+                     transition-all shrink-0 group"
+        >
+          <Icon
+            d="M3 12L12 3l9 9M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"
+            size={14}
+            className="group-hover:text-emerald-400 transition-colors"
+          />
+          <span className="text-[11px] font-semibold">Home</span>
+        </button>
+      </Tip>
+
+      <Sep vertical />
+
       {/* ── Undo / Redo ── */}
       <Tip label="Undo  Ctrl+Z">
         <button
