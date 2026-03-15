@@ -7,18 +7,21 @@ import { uid, getVideoDuration, captureFrame, buildStrip, clamp } from "./utils"
 ══════════════════════════════════════════════════════════════ */
 export function useEditorStore() {
 
-  /* ── Media tracks ── */
+  /* ── Media library (uploaded files, not yet on timeline) ── */
+  const [mediaLibrary, setMediaLibrary] = useState([]);
+
+  /* ── Timeline tracks ── */
   const [clips,       setClips]       = useState([]);
-  const [overlays,    setOverlays]    = useState([]);  // text overlays
+  const [overlays,    setOverlays]    = useState([]);
   const [subtitles,   setSubtitles]   = useState([]);
-  const [audioTracks, setAudioTracks] = useState([]);  // bg audio
+  const [audioTracks, setAudioTracks] = useState([]);
 
   /* ── Playback ── */
-  const [currentTime,   setCurrentTime]   = useState(0);
-  const [playing,       setPlaying]       = useState(false);
-  const [volume,        setVolume]        = useState(1);
-  const [muted,         setMuted]         = useState(false);
-  const [showControls,  setShowControls]  = useState(true);
+  const [currentTime,  setCurrentTime]  = useState(0);
+  const [playing,      setPlaying]      = useState(false);
+  const [volume,       setVolume]       = useState(1);
+  const [muted,        setMuted]        = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
   /* ── Selection ── */
   const [selectedClipId,    setSelectedClipId]    = useState(null);
@@ -26,31 +29,30 @@ export function useEditorStore() {
   const [selectedAudioId,   setSelectedAudioId]   = useState(null);
 
   /* ── UI ── */
-  const [aspectRatio,    setAspectRatio]    = useState("16:9");
-  const [activeLeftTab,  setActiveLeftTab]  = useState("clips");
-  const [leftCollapsed,  setLeftCollapsed]  = useState(false);
-  const [zoom,           setZoom]           = useState(1);
-  const [loading,        setLoading]        = useState(false);
-  const [dragOver,       setDragOver]       = useState(false);
-  const [snapEnabled,    setSnapEnabled]    = useState(true);
+  const [aspectRatio,   setAspectRatio]   = useState("16:9");
+  const [activeLeftTab, setActiveLeftTab] = useState("clips");
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [zoom,          setZoom]          = useState(1);
+  const [loading,       setLoading]       = useState(false);
+  const [dragOver,      setDragOver]      = useState(false);
+  const [snapEnabled,   setSnapEnabled]   = useState(true);
 
   /* ── Timeline interactions ── */
-  const [trimDrag,  setTrimDrag]  = useState(null);  // {clipId,edge,startX,origVal}
-  const [clipDrag,  setClipDrag]  = useState(null);  // {id,fromIdx,overIdx}
-  const [ovDrag,    setOvDrag]    = useState(null);  // {id,sx,sy,ox,oy,rect}
-  const [ctxMenu,   setCtxMenu]   = useState(null);  // {x,y,clipId,clipIdx}
+  const [trimDrag, setTrimDrag] = useState(null);
+  const [clipDrag, setClipDrag] = useState(null);
+  const [ovDrag,   setOvDrag]   = useState(null);
+  const [ctxMenu,  setCtxMenu]  = useState(null); // {x, y, clipId}
 
   /* ── Export ── */
-  const [exporting,        setExporting]        = useState(false);
-  const [exportProgress,   setExportProgress]   = useState(0);
-  const [exportDone,       setExportDone]        = useState(null);
+  const [exporting,      setExporting]      = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [exportDone,     setExportDone]     = useState(null);
 
   /* ── Undo / Redo ── */
-  const history    = useRef([]);   // array of clips snapshots
+  const history    = useRef([]);
   const historyIdx = useRef(-1);
 
   const pushHistory = useCallback((newClips) => {
-    // truncate redo branch
     history.current = history.current.slice(0, historyIdx.current + 1);
     history.current.push(JSON.parse(JSON.stringify(newClips)));
     historyIdx.current = history.current.length - 1;
@@ -89,36 +91,78 @@ export function useEditorStore() {
     [clips]
   );
 
-  /* ─────────────────── Clip CRUD ─────────────────── */
-  const addClips = useCallback(async (files) => {
+  /* ─────────────────── Media Library ─────────────────── */
+
+  /**
+   * Upload files → process thumbnails/filmstrips → add to library panel.
+   * Files do NOT automatically go to the timeline; drag them there.
+   */
+  const addToLibrary = useCallback(async (files) => {
     const vids = Array.from(files).filter((f) => f.type.startsWith("video/"));
     if (!vids.length) return;
     setLoading(true);
-    const newClips = await Promise.all(vids.map(async (file) => {
-      const url      = URL.createObjectURL(file);
-      const duration = await getVideoDuration(url);
-      const thumb    = await captureFrame(url, duration * 0.1);
-      const strip    = await buildStrip(url, 10);
-      return {
-        id: uid(), file, url, name: file.name,
-        duration, trimStart: 0, trimEnd: duration,
-        speed: 1, volume: 1,
-        filter: "", transition: "None",
-        thumb, strip,
-      };
-    }));
-    setClips((prev) => {
-      const next = [...prev, ...newClips];
-      pushHistory(next);
-      return next;
-    });
-    if (!selectedClipId && newClips.length) setSelectedClipId(newClips[0].id);
+    const items = await Promise.all(
+      vids.map(async (file) => {
+        const url      = URL.createObjectURL(file);
+        const duration = await getVideoDuration(url);
+        const thumb    = await captureFrame(url, duration * 0.1);
+        const strip    = await buildStrip(url, 10);
+        return {
+          id: uid(), file, url, name: file.name,
+          duration, thumb, strip,
+        };
+      })
+    );
+    setMediaLibrary((prev) => [...prev, ...items]);
     setLoading(false);
-  }, [selectedClipId, pushHistory]);
+  }, []);
 
+  /** Remove a clip from the media library (does NOT affect timeline clips). */
+  const removeFromLibrary = useCallback((id) => {
+    setMediaLibrary((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
+  /**
+   * Create a new timeline clip from a library item and insert it at insertIdx.
+   * insertIdx = -1 (or >= clips.length) means append to the end.
+   */
+  const addLibraryItemToTimeline = useCallback(
+    (libraryId, insertIdx = -1) => {
+      const item = mediaLibrary.find((m) => m.id === libraryId);
+      if (!item) return null;
+      const newClip = {
+        id: uid(),
+        file: item.file,
+        url: item.url,
+        name: item.name,
+        duration: item.duration,
+        trimStart: 0,
+        trimEnd: item.duration,
+        speed: 1,
+        volume: 1,
+        filter: "",
+        transition: "None",
+        thumb: item.thumb,
+        strip: item.strip,
+      };
+      setClips((prev) => {
+        const next = [...prev];
+        const idx =
+          insertIdx >= 0 && insertIdx <= next.length ? insertIdx : next.length;
+        next.splice(idx, 0, newClip);
+        pushHistory(next);
+        return next;
+      });
+      setSelectedClipId(newClip.id);
+      return newClip.id;
+    },
+    [mediaLibrary, pushHistory]
+  );
+
+  /* ─────────────────── Clip CRUD ─────────────────── */
   const updateClip = useCallback((id, patch) => {
     setClips((prev) => {
-      const next = prev.map((c) => c.id === id ? { ...c, ...patch } : c);
+      const next = prev.map((c) => (c.id === id ? { ...c, ...patch } : c));
       pushHistory(next);
       return next;
     });
@@ -135,7 +179,7 @@ export function useEditorStore() {
 
   const duplicateClip = useCallback((id) => {
     setClips((prev) => {
-      const i    = prev.findIndex((c) => c.id === id);
+      const i = prev.findIndex((c) => c.id === id);
       if (i < 0) return prev;
       const next = [...prev];
       next.splice(i + 1, 0, { ...prev[i], id: uid() });
@@ -145,16 +189,14 @@ export function useEditorStore() {
   }, [pushHistory]);
 
   const splitClip = useCallback((globalTime) => {
-    let acc = 0;
-    let idx = -1;
-    let local = 0;
+    let acc = 0, idx = -1, local = 0;
     for (let i = 0; i < clips.length; i++) {
       const d = clips[i].trimEnd - clips[i].trimStart;
       if (globalTime <= acc + d) { idx = i; local = globalTime - acc; break; }
       acc += d;
     }
     if (idx < 0) return;
-    const clip      = clips[idx];
+    const clip       = clips[idx];
     const splitPoint = clip.trimStart + local;
     if (local < 0.1 || clip.trimEnd - splitPoint < 0.1) return;
     const left  = { ...clip, id: uid(), trimEnd:   splitPoint };
@@ -180,11 +222,14 @@ export function useEditorStore() {
   }, [pushHistory]);
 
   const applyTrimDelta = useCallback((clipId, edge, dx) => {
-    setClips((prev) => prev.map((c) => {
-      if (c.id !== clipId) return c;
-      if (edge === "start") return { ...c, trimStart: clamp(c.trimStart + dx, 0, c.trimEnd - 0.1) };
-      return { ...c, trimEnd: clamp(c.trimEnd + dx, c.trimStart + 0.1, c.duration) };
-    }));
+    setClips((prev) =>
+      prev.map((c) => {
+        if (c.id !== clipId) return c;
+        if (edge === "start")
+          return { ...c, trimStart: clamp(c.trimStart + dx, 0, c.trimEnd - 0.1) };
+        return { ...c, trimEnd: clamp(c.trimEnd + dx, c.trimStart + 0.1, c.duration) };
+      })
+    );
   }, []);
 
   const commitTrim = useCallback(() => {
@@ -200,7 +245,8 @@ export function useEditorStore() {
       color: "#ffffff", bgColor: "rgba(0,0,0,0.5)",
       bold: false, italic: false, shadow: true, bgBox: false,
       align: "center",
-      startTime, endTime: Math.min(startTime + 3, endTimeCap || startTime + 3),
+      startTime,
+      endTime: Math.min(startTime + 3, endTimeCap || startTime + 3),
     };
     setOverlays((p) => [...p, ov]);
     setSelectedOverlayId(ov.id);
@@ -208,8 +254,10 @@ export function useEditorStore() {
     return ov.id;
   }, []);
 
-  const updateOverlay = useCallback((id, patch) =>
-    setOverlays((p) => p.map((o) => o.id === id ? { ...o, ...patch } : o)), []);
+  const updateOverlay = useCallback(
+    (id, patch) => setOverlays((p) => p.map((o) => (o.id === id ? { ...o, ...patch } : o))),
+    []
+  );
 
   const deleteOverlay = useCallback((id) => {
     setOverlays((p) => p.filter((o) => o.id !== id));
@@ -218,34 +266,52 @@ export function useEditorStore() {
 
   /* ─────────────────── Subtitle CRUD ─────────────────── */
   const addSubtitle = useCallback((startTime, endTimeCap) => {
-    setSubtitles((p) => [...p, {
-      id: uid(), text: "Subtitle text",
-      startTime, endTime: Math.min(startTime + 2.5, endTimeCap || startTime + 2.5),
-      fontSize: 22, color: "#ffffff", bgBox: true,
-    }]);
+    setSubtitles((p) => [
+      ...p,
+      {
+        id: uid(), text: "Subtitle text",
+        startTime,
+        endTime: Math.min(startTime + 2.5, endTimeCap || startTime + 2.5),
+        fontSize: 22, color: "#ffffff", bgBox: true,
+      },
+    ]);
   }, []);
 
-  const updateSubtitle = useCallback((id, patch) =>
-    setSubtitles((p) => p.map((s) => s.id === id ? { ...s, ...patch } : s)), []);
+  const updateSubtitle = useCallback(
+    (id, patch) => setSubtitles((p) => p.map((s) => (s.id === id ? { ...s, ...patch } : s))),
+    []
+  );
 
-  const deleteSubtitle = useCallback((id) =>
-    setSubtitles((p) => p.filter((s) => s.id !== id)), []);
+  const deleteSubtitle = useCallback(
+    (id) => setSubtitles((p) => p.filter((s) => s.id !== id)),
+    []
+  );
 
   /* ─────────────────── Audio CRUD ─────────────────── */
   const addAudioFile = useCallback((file) => {
-    const url = URL.createObjectURL(file);
+    const url   = URL.createObjectURL(file);
     const audio = new Audio(url);
-    audio.addEventListener("loadedmetadata", () => {
-      setAudioTracks((p) => [...p, {
-        id: uid(), name: file.name, url, file,
-        volume: 0.8, startTime: 0, duration: audio.duration,
-        muted: false,
-      }]);
-    }, { once: true });
+    audio.addEventListener(
+      "loadedmetadata",
+      () => {
+        setAudioTracks((p) => [
+          ...p,
+          {
+            id: uid(), name: file.name, url, file,
+            volume: 0.8, startTime: 0, duration: audio.duration,
+            muted: false,
+          },
+        ]);
+      },
+      { once: true }
+    );
   }, []);
 
-  const updateAudio = useCallback((id, patch) =>
-    setAudioTracks((p) => p.map((a) => a.id === id ? { ...a, ...patch } : a)), []);
+  const updateAudio = useCallback(
+    (id, patch) =>
+      setAudioTracks((p) => p.map((a) => (a.id === id ? { ...a, ...patch } : a))),
+    []
+  );
 
   const deleteAudio = useCallback((id) => {
     setAudioTracks((p) => p.filter((a) => a.id !== id));
@@ -254,6 +320,7 @@ export function useEditorStore() {
 
   return {
     /* state */
+    mediaLibrary, setMediaLibrary,
     clips, setClips,
     overlays, setOverlays,
     subtitles, setSubtitles,
@@ -283,7 +350,8 @@ export function useEditorStore() {
     totalDuration, selectedClip, selOv,
     /* methods */
     resolveTime, clipStartTime,
-    addClips, updateClip, deleteClip, duplicateClip,
+    addToLibrary, removeFromLibrary, addLibraryItemToTimeline,
+    updateClip, deleteClip, duplicateClip,
     splitClip, reorderClips, applyTrimDelta, commitTrim,
     addOverlay, updateOverlay, deleteOverlay,
     addSubtitle, updateSubtitle, deleteSubtitle,

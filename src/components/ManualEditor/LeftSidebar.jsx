@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Icon, Tip } from "./Icon";
 import { FONTS, FILTER_OPTIONS, TRANSITION_OPTIONS, fmtTime } from "./utils";
 
@@ -31,61 +32,148 @@ const Toggle = ({ on, onClick, label }) => (
   </button>
 );
 
-/* ═══════════════ CLIPS PANEL ═══════════════ */
+/* ═══════════════ CLIPS / MEDIA LIBRARY PANEL ═══════════════ */
 function ClipsPanel({ store }) {
-  const { clips, selectedClipId, setSelectedClipId, seekTo, clipStartTime,
-          deleteClip, loading, dragOver, setDragOver, addClips } = store;
+  const {
+    mediaLibrary, addToLibrary, removeFromLibrary,
+    addLibraryItemToTimeline,
+    loading, dragOver, setDragOver,
+  } = store;
+
+  /* drag a library item to the timeline */
+  const handleDragStart = (e, item) => {
+    e.dataTransfer.setData("application/x-library-id", item.id);
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-2">
-      {/* Drop zone */}
+
+      {/* ── Drop / upload zone ── */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); addClips(e.dataTransfer.files); }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          // Only accept real files, not timeline drag events
+          if (e.dataTransfer.files.length) addToLibrary(e.dataTransfer.files);
+        }}
         onClick={() => document.getElementById("clip-inp")?.click()}
-        className={`border-2 border-dashed rounded-2xl p-5 flex flex-col items-center gap-2 cursor-pointer transition-all
-          ${dragOver ? "border-emerald-400 bg-emerald-400/5" : "border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/30"}`}
+        className={`border-2 border-dashed rounded-2xl p-5 flex flex-col items-center gap-2 cursor-pointer transition-all select-none
+          ${dragOver
+            ? "border-emerald-400 bg-emerald-400/5"
+            : "border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/30"}`}
       >
-        {loading
-          ? <svg className="animate-spin w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
-              <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          : <Icon d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" size={22} className="text-zinc-500" />
-        }
+        {loading ? (
+          <svg className="animate-spin w-5 h-5 text-emerald-400" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
+            <path d="M12 2a10 10 0 0110 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        ) : (
+          <Icon d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" size={22} className="text-zinc-500" />
+        )}
         <p className="text-[11px] font-semibold text-zinc-300">Drop videos here</p>
         <p className="text-[10px] text-zinc-600">or click to browse</p>
-        <input id="clip-inp" type="file" multiple accept="video/*" className="hidden"
-          onChange={(e) => addClips(e.target.files)} />
+        {/* Hidden file input — shared ID, triggered from anywhere */}
+        <input
+          id="clip-inp"
+          type="file"
+          multiple
+          accept="video/*"
+          className="hidden"
+          onChange={(e) => addToLibrary(e.target.files)}
+        />
       </div>
 
-      {clips.map((c, i) => (
-        <div key={c.id}
-          onClick={() => { setSelectedClipId(c.id); seekTo(clipStartTime(i)); }}
-          className={`group flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all
-            ${selectedClipId === c.id
-              ? "border-emerald-400/40 bg-emerald-400/5 shadow-sm"
-              : "border-zinc-800/60 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/60"}`}
-        >
-          {c.thumb
-            ? <img src={c.thumb} className="w-14 h-8 rounded-lg object-cover shrink-0 ring-1 ring-zinc-700/50" alt="" />
-            : <div className="w-14 h-8 rounded-lg bg-zinc-800 shrink-0 flex items-center justify-center text-zinc-600">
-                <Icon d="M15 10l4.553-2.07" size={12} />
-              </div>
-          }
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold text-zinc-200 truncate">{c.name.replace(/\.[^.]+$/, "")}</p>
-            <p className="text-[10px] text-zinc-600 mono mt-0.5">
-              {fmtTime(c.trimEnd - c.trimStart)}
-              {c.speed !== 1 && <span className="ml-1.5 text-amber-400">{c.speed}×</span>}
-            </p>
+      {/* ── Library empty state ── */}
+      {mediaLibrary.length === 0 && !loading && (
+        <div className="text-center py-6">
+          <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3">
+            <Icon d="M15 10l4.553-2.07A1 1 0 0121 8.94V15.06a1 1 0 01-1.447.91L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" size={18} className="text-zinc-600" />
           </div>
-          <button onClick={(e) => { e.stopPropagation(); deleteClip(c.id); }}
-            className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 p-1 transition-all shrink-0">
-            <Icon d="M18 6L6 18M6 6l12 12" size={11} />
-          </button>
+          <p className="text-[11px] text-zinc-600">Your media library is empty</p>
+          <p className="text-[10px] text-zinc-700 mt-1">Upload videos above, then drag<br/>them to the timeline below</p>
         </div>
-      ))}
+      )}
+
+      {/* ── Library items ── */}
+      {mediaLibrary.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-semibold px-0.5 pb-1">
+            Media Library · {mediaLibrary.length} clip{mediaLibrary.length !== 1 ? "s" : ""}
+          </p>
+
+          {mediaLibrary.map((item) => (
+            <div
+              key={item.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, item)}
+              className="group flex items-center gap-2.5 p-2 rounded-xl border border-zinc-800/60
+                         bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/60
+                         cursor-grab active:cursor-grabbing transition-all select-none"
+            >
+              {/* Drag handle */}
+              <div className="text-zinc-700 group-hover:text-zinc-500 transition-colors shrink-0">
+                <Icon d="M9 5h2M9 10h2M9 15h2M13 5h2M13 10h2M13 15h2" size={12} />
+              </div>
+
+              {/* Thumbnail */}
+              {item.thumb ? (
+                <img
+                  src={item.thumb}
+                  className="w-14 h-8 rounded-lg object-cover shrink-0 ring-1 ring-zinc-700/50 pointer-events-none"
+                  alt=""
+                  draggable={false}
+                />
+              ) : (
+                <div className="w-14 h-8 rounded-lg bg-zinc-800 shrink-0 flex items-center justify-center text-zinc-600">
+                  <Icon d="M15 10l4.553-2.07" size={12} />
+                </div>
+              )}
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-zinc-200 truncate leading-tight">
+                  {item.name.replace(/\.[^.]+$/, "")}
+                </p>
+                <p className="text-[10px] text-zinc-600 mono mt-0.5">
+                  {fmtTime(item.duration)}
+                </p>
+              </div>
+
+              {/* Quick-add to timeline end */}
+              <Tip label="Add to timeline" side="left">
+                <button
+                  onClick={(e) => { e.stopPropagation(); addLibraryItemToTimeline(item.id); }}
+                  className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-lg bg-emerald-400/10
+                             border border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/20
+                             flex items-center justify-center shrink-0 transition-all"
+                >
+                  <Icon d="M12 5v14M5 12h14" size={11} />
+                </button>
+              </Tip>
+
+              {/* Remove from library */}
+              <button
+                onClick={(e) => { e.stopPropagation(); removeFromLibrary(item.id); }}
+                className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400
+                           p-1 transition-all shrink-0"
+              >
+                <Icon d="M18 6L6 18M6 6l12 12" size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Drag hint ── */}
+      {mediaLibrary.length > 0 && (
+        <div className="flex items-center gap-2 px-2 py-2 rounded-xl bg-zinc-900/40 border border-zinc-800/40">
+          <Icon d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" size={12} className="text-zinc-600 shrink-0" />
+          <p className="text-[10px] text-zinc-600">Drag clips to the timeline, or press <span className="text-zinc-400">+</span> to append</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -147,31 +235,29 @@ function TextPanel({ store }) {
                            [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch-wrapper]:p-0" />
             </div>
             <div><Label>BG Color</Label>
-              <input type="color" value={selOv.bgColor?.replace(/rgba?\(.*?\)/,"") || "#000000"}
+              <input type="color" value={selOv.bgColor?.replace(/rgba?\(.*?\)/, "") || "#000000"}
                 onChange={(e) => updateOverlay(selOv.id, { bgColor: e.target.value + "bb" })}
                 className="w-full h-9 rounded-lg cursor-pointer bg-zinc-800 border border-zinc-700/60 p-0.5
                            [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch-wrapper]:p-0" />
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Toggle on={selOv.bold}   onClick={() => updateOverlay(selOv.id, { bold:   !selOv.bold   })} label="B" />
-            <Toggle on={selOv.italic} onClick={() => updateOverlay(selOv.id, { italic: !selOv.italic })} label="I" />
-            <Toggle on={selOv.bgBox}  onClick={() => updateOverlay(selOv.id, { bgBox:  !selOv.bgBox  })} label="BG" />
+          <div className="flex gap-2 flex-wrap">
+            <Toggle on={selOv.bold}   onClick={() => updateOverlay(selOv.id, { bold:   !selOv.bold   })} label="Bold" />
+            <Toggle on={selOv.italic} onClick={() => updateOverlay(selOv.id, { italic: !selOv.italic })} label="Italic" />
             <Toggle on={selOv.shadow} onClick={() => updateOverlay(selOv.id, { shadow: !selOv.shadow })} label="Shadow" />
+            <Toggle on={selOv.bgBox}  onClick={() => updateOverlay(selOv.id, { bgBox:  !selOv.bgBox  })} label="Box" />
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <div><Label>Show At (s)</Label>
-              <Input type="number" value={selOv.startTime.toFixed(1)} step={0.1} min={0}
-                onChange={(e) => updateOverlay(selOv.id, { startTime: Number(e.target.value) })} className="mono" />
-            </div>
-            <div><Label>Hide At (s)</Label>
-              <Input type="number" value={selOv.endTime.toFixed(1)} step={0.1} min={0}
-                onChange={(e) => updateOverlay(selOv.id, { endTime: Number(e.target.value) })} className="mono" />
-            </div>
+            {["startTime", "endTime"].map((k) => (
+              <div key={k}>
+                <Label>{k === "startTime" ? "Start" : "End"}</Label>
+                <Input type="number" value={selOv[k].toFixed(1)} step={0.1} min={0} className="mono"
+                  onChange={(e) => updateOverlay(selOv.id, { [k]: Number(e.target.value) })} />
+              </div>
+            ))}
           </div>
-          <p className="text-[9px] text-zinc-600 text-center">↕ Drag text on preview to reposition</p>
         </div>
       )}
     </div>
@@ -180,54 +266,56 @@ function TextPanel({ store }) {
 
 /* ═══════════════ AUDIO PANEL ═══════════════ */
 function AudioPanel({ store }) {
-  const { audioTracks, updateAudio, deleteAudio, addAudioFile, selectedAudioId, setSelectedAudioId } = store;
+  const { audioTracks, addAudioFile, updateAudio, deleteAudio, selectedAudioId, setSelectedAudioId } = store;
+
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-2">
-      <div onClick={() => document.getElementById("audio-inp")?.click()}
-        className="border-2 border-dashed border-zinc-800 rounded-2xl p-4 flex flex-col items-center gap-2
-                   cursor-pointer hover:border-zinc-600 hover:bg-zinc-900/30 transition-all text-center">
+      <div
+        onClick={() => document.getElementById("audio-inp")?.click()}
+        className="border-2 border-dashed rounded-2xl p-4 flex flex-col items-center gap-2 cursor-pointer
+                   border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900/30 transition-all">
         <Icon d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0z" size={20} className="text-zinc-500" />
-        <div>
-          <p className="text-[11px] font-semibold text-zinc-300">Upload Audio</p>
-          <p className="text-[10px] text-zinc-600">MP3, WAV, AAC, OGG</p>
-        </div>
-        <input id="audio-inp" type="file" accept="audio/*" multiple className="hidden"
-          onChange={(e) => Array.from(e.target.files).forEach(addAudioFile)} />
+        <p className="text-[11px] font-semibold text-zinc-300">Add Background Audio</p>
+        <input id="audio-inp" type="file" accept="audio/*" className="hidden"
+          onChange={(e) => e.target.files?.[0] && addAudioFile(e.target.files[0])} />
       </div>
 
       {audioTracks.map((a) => (
         <div key={a.id}
           onClick={() => setSelectedAudioId(a.id)}
-          className={`group border rounded-xl p-3 space-y-2 cursor-pointer transition-all
+          className={`group p-2.5 rounded-xl border cursor-pointer transition-all
             ${selectedAudioId === a.id ? "border-sky-400/40 bg-sky-400/5" : "border-zinc-800/60 bg-zinc-900/30 hover:border-zinc-700"}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-sky-400/10 border border-sky-400/20 flex items-center justify-center text-sky-400 shrink-0">
-                <Icon d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0z" size={12} />
-              </div>
-              <p className="text-[11px] font-semibold text-zinc-200 truncate max-w-[110px]">{a.name.replace(/\.[^.]+$/, "")}</p>
-            </div>
-            <div className="flex items-center gap-1">
-              <button onClick={(e) => { e.stopPropagation(); updateAudio(a.id, { muted: !a.muted }); }}
-                className={`p-1 rounded transition-colors ${a.muted ? "text-red-400" : "text-zinc-600 hover:text-zinc-300"}`}>
-                <Icon d={a.muted ? "M5.586 15H4a1 1 0 01-1-1V10a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m2 2l-2-2" : "M9 18V5l12-2v13"} size={12} />
-              </button>
-              <button onClick={(e) => { e.stopPropagation(); deleteAudio(a.id); }}
-                className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 p-1 transition-all">
-                <Icon d="M18 6L6 18M6 6l12 12" size={11} />
-              </button>
-            </div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] font-semibold text-zinc-200 truncate max-w-[140px]">{a.name.replace(/\.[^.]+$/, "")}</p>
+            <button onClick={(e) => { e.stopPropagation(); deleteAudio(a.id); }}
+              className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 p-0.5 transition-all">
+              <Icon d="M18 6L6 18M6 6l12 12" size={11} />
+            </button>
           </div>
-
           <div className="flex items-center gap-2">
-            <Icon d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0z" size={11} className="text-zinc-600 shrink-0" />
-            <input type="range" min={0} max={1} step={0.05} value={a.volume}
-              onChange={(e) => updateAudio(a.id, { volume: Number(e.target.value) })}
-              className="flex-1 accent-emerald-400 h-1.5" />
-            <span className="text-[10px] mono text-zinc-500 w-7 text-right">{Math.round(a.volume * 100)}%</span>
+            <button onClick={(e) => { e.stopPropagation(); updateAudio(a.id, { muted: !a.muted }); }}
+              className={`p-1 rounded transition-colors ${a.muted ? "text-zinc-600" : "text-sky-400"}`}>
+              <Icon d={a.muted
+                ? "M5.586 15H4a1 1 0 01-1-1V10a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
+                : "M15.536 8.464a5 5 0 010 7.072M12 6a7 7 0 010 12M9 9H5a1 1 0 00-1 1v4a1 1 0 001 1h4l5 5V4L9 9z"} size={12} />
+            </button>
+            <div className="relative flex-1 h-1.5 bg-zinc-700 rounded-full cursor-pointer overflow-hidden"
+              onClick={(e) => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                updateAudio(a.id, { volume: Math.round(((e.clientX - r.left) / r.width) * 20) / 20 });
+              }}>
+              <div className="h-full bg-sky-400 rounded-full pointer-events-none"
+                style={{ width: `${(a.volume ?? 0.8) * 100}%` }} />
+              <input type="range" min={0} max={1} step={0.05} value={a.volume ?? 0.8}
+                onChange={(e) => { e.stopPropagation(); updateAudio(a.id, { volume: Number(e.target.value) }); }}
+                className="absolute inset-0 w-full opacity-0 cursor-pointer" />
+            </div>
+            <span className="text-[10px] mono text-zinc-500 w-7 text-right shrink-0">
+              {Math.round((a.volume ?? 0.8) * 100)}%
+            </span>
           </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 mt-2">
             <span className="text-[9px] text-zinc-600 uppercase tracking-wider">Start</span>
             <input type="number" value={(a.startTime || 0).toFixed(1)} step={0.5} min={0}
               onChange={(e) => updateAudio(a.id, { startTime: Number(e.target.value) })}
@@ -282,10 +370,8 @@ function SubsPanel({ store }) {
 /* ═══════════════ EFFECTS PANEL ═══════════════ */
 function EffectsPanel({ store }) {
   const { selectedClip, updateClip } = store;
-
   return (
     <div className="flex-1 overflow-y-auto p-3 space-y-4">
-      {/* Transitions */}
       <div>
         <p className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-2">Transitions</p>
         <div className="grid grid-cols-2 gap-1.5">
@@ -302,8 +388,6 @@ function EffectsPanel({ store }) {
           ))}
         </div>
       </div>
-
-      {/* Filters */}
       <div>
         <p className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-2">Filters</p>
         <div className="grid grid-cols-2 gap-1.5">
@@ -320,7 +404,6 @@ function EffectsPanel({ store }) {
           ))}
         </div>
       </div>
-
       {!selectedClip && (
         <p className="text-[11px] text-zinc-700 text-center italic pt-2">Select a clip to apply effects</p>
       )}
@@ -333,11 +416,11 @@ export function LeftSidebar({ store }) {
   const { activeLeftTab, setActiveLeftTab, leftCollapsed, setLeftCollapsed } = store;
 
   const panels = {
-    clips: <ClipsPanel store={store} />,
-    text: <TextPanel store={store} />,
-    audio: <AudioPanel store={store} />,
-    subtitles: <SubsPanel store={store} />,
-    effects: <EffectsPanel store={store} />,
+    clips:     <ClipsPanel     store={store} />,
+    text:      <TextPanel      store={store} />,
+    audio:     <AudioPanel     store={store} />,
+    subtitles: <SubsPanel      store={store} />,
+    effects:   <EffectsPanel   store={store} />,
   };
 
   return (
@@ -361,7 +444,6 @@ export function LeftSidebar({ store }) {
           </Tip>
         ))}
         <div className="flex-1" />
-        {/* Collapse toggle */}
         <button onClick={() => setLeftCollapsed((v) => !v)}
           className="w-10 h-8 rounded-xl flex items-center justify-center text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800 transition-all">
           <Icon d={leftCollapsed ? "M9 18l6-6-6-6" : "M15 18l-6-6 6-6"} size={14} />
