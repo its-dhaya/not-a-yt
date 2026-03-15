@@ -1,0 +1,372 @@
+import { useEffect, useRef, useCallback } from "react";
+import { useEditorStore } from "./useEditorStore";
+import { TopBar }      from "./TopBar";
+import { LeftSidebar } from "./LeftSidebar";
+import { Preview }     from "./Preview";
+import { Timeline }    from "./Timeline";
+import { ContextMenu } from "./ContextMenu";
+import { BASE_URL }    from "./utils";
+
+const NAV_H      = 64;   // outer nav height (paddingTop)
+const TOPBAR_H   = 48;
+const TIMELINE_H = 160;
+
+export default function ManualEditor() {
+  const store = useEditorStore();
+  const {
+    clips, setClips,
+    overlays, subtitles, audioTracks,
+    currentTime, setCurrentTime,
+    playing, setPlaying,
+    volume, muted,
+    showControls, setShowControls,
+    trimDrag,
+    zoom,
+    totalDuration, resolveTime, clipStartTime,
+    exporting, setExporting, setExportProgress, setExportDone,
+    ovDrag, setOvDrag, setOverlays,
+    aspectRatio,
+    ctxMenu,
+    selectedClipId, setSelectedClipId,
+    deleteClip, duplicateClip, splitClip,
+    undo, redo,
+  } = store;
+
+  const videoRef   = useRef(null);
+  const audioRefs  = useRef({});   // { [trackId]: HTMLAudioElement }
+  const rafRef     = useRef(null);
+  const playStart  = useRef({ wall: 0, media: 0 });
+  const hideTimer  = useRef(null);
+
+  /* ═══════════════════════════════════════════════
+     PLAYBACK ENGINE
+  ═══════════════════════════════════════════════ */
+  useEffect(() => {
+    if (!playing || !clips.length) return;
+
+    const tick = () => {
+      const elapsed = (performance.now() - playStart.current.wall) / 1000;
+      const t       = Math.min(playStart.current.media + elapsed, totalDuration);
+      setCurrentTime(t);
+
+      if (t >= totalDuration) {
+        setPlaying(false);
+        videoRef.current?.pause();
+        Object.values(audioRefs.current).forEach((a) => a.pause());
+        return;
+      }
+
+      /* Which clip are we in? */
+      const { idx, local } = resolveTime(t);
+      const clip = clips[idx];
+
+      if (videoRef.current) {
+        const vid = videoRef.current;
+
+        /* Switch clip if needed */
+        if (vid.dataset.clipId !== clip.id) {
+          vid.pause();
+          vid.src = clip.url;
+          vid.dataset.clipId = clip.id;
+          vid.playbackRate = clip.speed || 1;
+          vid.volume = muted ? 0 : (clip.volume ?? 1) * volume;
+          vid.currentTime = clip.trimStart + local;
+          vid.play().catch(() => {});
+          playStart.current = { wall: performance.now(), media: t };
+        } else {
+          /* Maintain playback rate */
+          const rate = clip.speed || 1;
+          if (vid.playbackRate !== rate) vid.playbackRate = rate;
+
+          /* Drift correction */
+          const want = clip.trimStart + local;
+          if (Math.abs(vid.currentTime - want) > 0.4) vid.currentTime = want;
+
+          /* Ensure playing */
+          if (vid.paused) {
+            vid.play().catch(() => {});
+            playStart.current = { wall: performance.now(), media: t };
+          }
+        }
+      }
+
+      /* Sync background audio tracks */
+      audioTracks.forEach((track) => {
+        let el = audioRefs.current[track.id];
+        if (!el) {
+          el = new Audio(track.url);
+          audioRefs.current[track.id] = el;
+        }
+        const trackLocal = t - (track.startTime || 0);
+        if (trackLocal >= 0 && trackLocal <= (track.duration || Infinity)) {
+          el.volume = track.muted ? 0 : (track.volume ?? 0.8) * volume;
+          if (Math.abs(el.currentTime - trackLocal) > 0.5) el.currentTime = trackLocal;
+          if (el.paused) el.play().catch(() => {});
+        } else {
+          if (!el.paused) el.pause();
+        }
+      });
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    playStart.current = { wall: performance.now(), media: currentTime };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      videoRef.current?.pause();
+      Object.values(audioRefs.current).forEach((a) => a.pause());
+    };
+  }, [playing]); // intentionally only re-runs on play/pause toggle
+
+  /* ═══════════════════════════════════════════════
+     SEEK
+  ═══════════════════════════════════════════════ */
+  const seekTo = useCallback((t) => {
+    const ct = Math.max(0, Math.min(t, Math.max(totalDuration, 0.001)));
+    cancelAnimationFrame(rafRef.current);
+    setCurrentTime(ct);
+    setPlaying(false);
+
+    if (!clips.length) return;
+
+    const { idx, local } = resolveTime(ct);
+    const clip = clips[idx];
+
+    if (clip && videoRef.current) {
+      const vid = videoRef.current;
+      const load = () => {
+        vid.playbackRate = clip.speed || 1;
+        vid.volume = muted ? 0 : (clip.volume ?? 1) * volume;
+        vid.currentTime = clip.trimStart + local;
+      };
+      if (vid.dataset.clipId !== clip.id) {
+        vid.src = clip.url;
+        vid.dataset.clipId = clip.id;
+        vid.addEventListener("loadeddata", load, { once: true });
+      } else {
+        load();
+      }
+    }
+
+    /* Seek audio tracks */
+    audioTracks.forEach((track) => {
+      const el = audioRefs.current[track.id];
+      if (!el) return;
+      const trackLocal = ct - (track.startTime || 0);
+      if (trackLocal >= 0) el.currentTime = Math.min(trackLocal, track.duration || 0);
+    });
+  }, [clips, totalDuration, resolveTime, volume, muted, audioTracks]);
+
+  /* ═══════════════════════════════════════════════
+     INIT FIRST CLIP
+  ═══════════════════════════════════════════════ */
+  useEffect(() => {
+    if (clips.length > 0 && videoRef.current && !videoRef.current.dataset.clipId) {
+      const c = clips[0];
+      videoRef.current.src = c.url;
+      videoRef.current.dataset.clipId = c.id;
+      videoRef.current.volume = muted ? 0 : (c.volume ?? 1) * volume;
+      videoRef.current.currentTime = c.trimStart;
+    }
+  }, [clips.length]);
+
+  /* ── When a new clip is added, reset clipId if needed ── */
+  useEffect(() => {
+    if (clips.length === 0 && videoRef.current) {
+      videoRef.current.src = "";
+      videoRef.current.dataset.clipId = "";
+    }
+  }, [clips.length]);
+
+  /* ═══════════════════════════════════════════════
+     VOLUME SYNC
+  ═══════════════════════════════════════════════ */
+  useEffect(() => {
+    if (videoRef.current) {
+      const clip = clips.find((c) => c.id === videoRef.current.dataset.clipId);
+      videoRef.current.volume = muted ? 0 : (clip?.volume ?? 1) * volume;
+    }
+    Object.entries(audioRefs.current).forEach(([id, el]) => {
+      const track = audioTracks.find((a) => a.id === id);
+      if (track) el.volume = (track.muted || muted) ? 0 : (track.volume ?? 0.8) * volume;
+    });
+  }, [volume, muted]);
+
+  /* ═══════════════════════════════════════════════
+     TOGGLE PLAY
+  ═══════════════════════════════════════════════ */
+  const togglePlay = useCallback(() => {
+    if (!clips.length) return;
+    if (playing) { setPlaying(false); return; }
+    if (currentTime >= totalDuration - 0.05) { seekTo(0); setTimeout(() => setPlaying(true), 80); return; }
+    setPlaying(true);
+  }, [playing, clips.length, currentTime, totalDuration, seekTo]);
+
+  /* ═══════════════════════════════════════════════
+     AUTO-HIDE CONTROLS
+  ═══════════════════════════════════════════════ */
+  useEffect(() => {
+    clearTimeout(hideTimer.current);
+    if (!playing) { setShowControls(true); return; }
+    setShowControls(true);
+    hideTimer.current = setTimeout(() => setShowControls(false), 2800);
+    return () => clearTimeout(hideTimer.current);
+  }, [playing]);
+
+  /* ═══════════════════════════════════════════════
+     KEYBOARD SHORTCUTS
+  ═══════════════════════════════════════════════ */
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      /* Space = play/pause */
+      if (e.code === "Space") { e.preventDefault(); togglePlay(); return; }
+
+      /* Ctrl+Z / Ctrl+Y = undo/redo */
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "z") { e.preventDefault(); undo(); return; }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.shiftKey && e.key === "z"))) { e.preventDefault(); redo(); return; }
+
+      /* Ctrl+K = split */
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); splitClip(currentTime); return; }
+
+      /* Ctrl+D = duplicate */
+      if ((e.ctrlKey || e.metaKey) && e.key === "d") {
+        e.preventDefault();
+        if (selectedClipId) duplicateClip(selectedClipId);
+        return;
+      }
+
+      /* Delete / Backspace = delete selected clip */
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedClipId) {
+        deleteClip(selectedClipId);
+        return;
+      }
+
+      /* Arrow keys = nudge playhead */
+      if (e.key === "ArrowLeft")  { e.preventDefault(); seekTo(currentTime - (e.shiftKey ? 1 : 0.033)); }
+      if (e.key === "ArrowRight") { e.preventDefault(); seekTo(currentTime + (e.shiftKey ? 1 : 0.033)); }
+
+      /* J/K/L shuttle */
+      if (e.key === "j") seekTo(Math.max(0, currentTime - 5));
+      if (e.key === "l") seekTo(Math.min(totalDuration, currentTime + 5));
+      if (e.key === "k") setPlaying(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [playing, currentTime, selectedClipId, totalDuration]);
+
+  /* ═══════════════════════════════════════════════
+     EXPORT
+  ═══════════════════════════════════════════════ */
+  const handleExport = async () => {
+    if (!clips.length) return;
+    setExporting(true); setExportProgress(5); setExportDone(null);
+    try {
+      const form = new FormData();
+      clips.forEach((c, i) => form.append(`clip_${i}`, c.file, c.name));
+      audioTracks.forEach((a, i) => form.append(`audio_${i}`, a.file, a.name));
+      form.append("meta", JSON.stringify({
+        aspectRatio,
+        clips: clips.map((c, i) => ({
+          index: i, name: c.name,
+          trimStart: c.trimStart, trimEnd: c.trimEnd,
+          speed: c.speed, volume: c.volume,
+          filter: c.filter, transition: c.transition,
+        })),
+        overlays: overlays.map(({ file, strip, thumb, ...o }) => o),
+        subtitles,
+        audio: audioTracks.map((a) => ({
+          name: a.name, volume: a.volume,
+          startTime: a.startTime, duration: a.duration, muted: a.muted,
+        })),
+      }));
+      setExportProgress(20);
+      const res = await fetch(`${BASE_URL}/export-video`, { method: "POST", body: form });
+      setExportProgress(90);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Export failed");
+      }
+      setExportDone(URL.createObjectURL(await res.blob()));
+      setExportProgress(100);
+    } catch (err) {
+      alert("Export failed: " + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /* ── Cleanup audio elements on unmount ── */
+  useEffect(() => {
+    return () => {
+      Object.values(audioRefs.current).forEach((a) => { a.pause(); a.src = ""; });
+    };
+  }, []);
+
+  /* ── Remove stale audio refs when tracks are deleted ── */
+  useEffect(() => {
+    const ids = new Set(audioTracks.map((a) => a.id));
+    Object.keys(audioRefs.current).forEach((id) => {
+      if (!ids.has(id)) {
+        audioRefs.current[id].pause();
+        delete audioRefs.current[id];
+      }
+    });
+  }, [audioTracks]);
+
+  /* ═══════════════════════════════════════════════
+     BUILD ENRICHED STORE (pass computed fns to children)
+  ═══════════════════════════════════════════════ */
+  const enriched = {
+    ...store,
+    seekTo,
+    togglePlay,
+    handleExport,
+  };
+
+  return (
+    <div
+      className="flex flex-col bg-[#0c0c0e] overflow-hidden select-none text-zinc-200"
+      style={{ height: "100vh", paddingTop: NAV_H }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        *, *::before, *::after { box-sizing: border-box; }
+        body, * { font-family: 'DM Sans', sans-serif; }
+        .mono, code, input[type=number] { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+        @keyframes fadeup {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0);    }
+        }
+        input[type=range] { cursor: pointer; }
+        input[type=color] { cursor: pointer; }
+      `}</style>
+
+      {/* Top bar */}
+      <TopBar store={enriched} />
+
+      {/* Body: sidebar + preview */}
+      <div
+        className="flex min-h-0"
+        style={{ height: `calc(100vh - ${NAV_H}px - ${TOPBAR_H}px - ${TIMELINE_H}px)` }}
+      >
+        <LeftSidebar store={enriched} />
+        <Preview store={enriched} videoRef={videoRef} />
+      </div>
+
+      {/* Timeline */}
+      <Timeline store={enriched} />
+
+      {/* Context menu */}
+      {ctxMenu && <ContextMenu ctxMenu={ctxMenu} store={enriched} />}
+    </div>
+  );
+}
